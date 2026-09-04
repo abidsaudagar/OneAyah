@@ -26,8 +26,6 @@ export class TvView {
   private readonly elTrans: HTMLElement;
   private readonly elStack: HTMLElement;
   private readonly elAuto: HTMLElement;
-  /** The ayah on screen, so its size can be recomputed without a repaint. */
-  private text = '';
 
   constructor(cb: TvCallbacks) {
     this.elClock = el('div', { class: 'tv__clock', text: '00:00' });
@@ -56,68 +54,46 @@ export class TvView {
       }),
       el('div', { class: 'tv__foot' },
         this.elAuto,
-        el('span', { text: '← → TO MOVE THROUGH THE AYAT · T FOR TRANSLATION · ESC TO EXIT' })),
+        el('span', { text: '← → TO MOVE THROUGH THE AYAT · [ ] FOR TEXT SIZE · T FOR TRANSLATION · ESC TO EXIT' })),
     );
   }
 
   paintVerse(surah: Surah, index: number, settings: Snapshot['settings']): void {
-    const text = surah.ar[index] ?? '';
-    // Only a real change earns the fade; a size nudge or a translation toggle
-    // repaints the same ayah and should not blink it.
-    const moved = text !== this.text;
-    this.text = text;
-    this.elAyah.textContent = text;
+    this.elAyah.textContent = surah.ar[index] ?? '';
     this.elAyah.dataset.font = settings.arabicFont;
-    // The translation is sized off the same viewport rather than the reader's
-    // own px setting: what is comfortable at a desk is unreadable at 3 metres.
-    // It rides at a fraction of the stack's size, so one number drives both.
     this.elTrans.textContent = surah.en[index] ?? '';
     this.elTrans.hidden = !settings.showTranslation;
-
-    // Scale with the viewport and inversely with length, so a long ayah still
-    // fits without the nowrap overflow the design mock would have had. The
-    // stack carries the size; the ayah is 1em of it and the translation a
-    // fraction, so one number moves the pair together.
-    //
-    // With the English underneath, the Arabic gives up about a quarter of its
-    // size to make room. That is a fixed ratio rather than a measured fit: a
-    // measure-and-shrink pass has to re-run on every reflow, and one that
-    // misfires leaves the reader staring at the wrong size with no way back.
-    this.sizeStack(settings.showTranslation);
-    if (moved) this.markChanged();
-  }
-
-  /**
-   * Size falls as one over the square root of the length. Text fills an area,
-   * and area grows with length times size squared, so this keeps roughly the
-   * same block of ink on screen whatever the ayah is.
-   *
-   * It replaces four length buckets. Their edges meant two ayat of near-equal
-   * length could land a third apart in size -- 3:5 at 105 characters rendered
-   * at 50px and 3:6 at 147 characters at 37px -- and crossing an edge read as a
-   * lurch. The constant is fitted to what those buckets already gave at their
-   * own boundaries, so no ayah is resized much; only the cliffs between them go.
-   */
-  private sizeStack(showTranslation: boolean): void {
-    const vw = Math.min(8.4, 68 / Math.sqrt(Math.max(1, this.text.length)));
-    const scaled = showTranslation ? vw * 0.74 : vw;
-    this.elStack.style.fontSize = `clamp(24px, ${scaled.toFixed(2)}vw, 160px)`;
-  }
-
-  /**
-   * The size and the line count both move with the ayah, and the stack is
-   * centred, so a swap in place pushes the text out from both ends at once --
-   * the reader's eye follows it. Cutting to the new ayah at zero opacity and
-   * fading it up puts the whole reflow behind a frame nobody sees: there is no
-   * motion to track, so it reads as a replacement rather than a slide. Short
-   * enough to keep up with a held arrow key, and reduced-motion collapses it
-   * back to the plain cut.
-   */
-  private markChanged(): void {
+    this.sizeStack(settings);
+    // A long ayah left scrolled down would otherwise hand its offset to the
+    // next one, which arrives at the top.
     this.elStack.scrollTop = 0;
-    this.elStack.classList.remove('tv__stack--in');
-    void this.elStack.offsetWidth; // restart the animation
-    this.elStack.classList.add('tv__stack--in');
+  }
+
+  /**
+   * The size the reader chose, read off the same `arabicSize` the reader itself
+   * paints -- so `[` and `]` work here too -- but carried in vw rather than px,
+   * since a number picked at a desk is not a number for a screen across a room.
+   * The setting is what it would be on a 1000px window, so the default 64 gives
+   * 6.4vw: near enough to what fullscreen already showed for a middling ayah,
+   * and it grows with the screen the way a TV mode should.
+   *
+   * What matters is what is NOT here. The size used to be derived from the
+   * length of the ayah, so every single verse change restyled the stack and
+   * reflowed it, and no amount of smoothing the curve fixed that -- the reader
+   * has no such term, which is exactly why moving between ayat felt clean there
+   * and not here. Now both modes size from one setting and a verse change is a
+   * textContent swap in both.
+   *
+   * The cost is that a long ayah is no longer shrunk to fit; the stack scrolls,
+   * as it already did for the longest ayat with the translation on. That is the
+   * better trade: `[` hands the reader the fit directly, and an automatic one
+   * that misfires leaves them staring at the wrong size with no way back.
+   */
+  private sizeStack(settings: Snapshot['settings']): void {
+    // With the English underneath, the Arabic gives up about a quarter of its
+    // size to make room. Verse-independent, so it costs nothing on a move.
+    const vw = (settings.arabicSize / 10) * (settings.showTranslation ? 0.74 : 1);
+    this.elStack.style.fontSize = `clamp(24px, ${vw.toFixed(2)}vw, 160px)`;
   }
 
   paintState(snap: Snapshot): void {
@@ -130,7 +106,7 @@ export class TvView {
     // toggling it -- from the key or from the settings panel -- never waits on
     // the next ayah to take effect, size included.
     this.elTrans.hidden = !snap.settings.showTranslation;
-    this.sizeStack(snap.settings.showTranslation);
+    this.sizeStack(snap.settings);
   }
 
   paintClock(remainingSec: number): void {
