@@ -319,6 +319,15 @@ export class ReaderView {
    * painted whole and held there while the parts turn under it.
    */
   paintVerse(surah: Surah, index: number, page: number, settings: Snapshot['settings']): void {
+    // The translation is settled BEFORE the split, not after. The ayah frame is
+    // what the rest of the column leaves, and both of these move it: the size
+    // sets how tall the translation box reserves, and hiding it hands that room
+    // back. Split first and the pages would be measured against the frame the
+    // PREVIOUS setting left.
+    this.elTrans.textContent = surah.en[index] ?? '';
+    this.elTrans.hidden = !settings.showTranslation;
+    this.root.style.setProperty('--trans-size', `${settings.translationSize}px`);
+
     this.elAyah.dataset.font = settings.arabicFont;
     this.elAyah.style.fontSize = `${settings.arabicSize}px`;
     this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', this.availableHeight());
@@ -326,9 +335,6 @@ export class ReaderView {
     this.elAyah.textContent = this.pages[shown] ?? '';
     this.elLocPart.textContent = ` · part ${shown + 1} of ${this.pages.length}`;
     this.elLocPart.hidden = this.pages.length < 2;
-    this.elTrans.textContent = surah.en[index] ?? '';
-    this.elTrans.style.fontSize = `${settings.translationSize}px`;
-    this.elTrans.hidden = !settings.showTranslation;
     this.ayahCount = surah.meta.c;
     this.ayahShown = index + 1;
     this.elLocSurahTr.textContent = surah.meta.tr;

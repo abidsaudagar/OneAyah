@@ -26,10 +26,20 @@ button {
 
 /* ---------------------------------------------------------------- app frame */
 
-#app { min-height: 100%; display: flex; flex-direction: column; }
+/* Exactly the window, never more. The reader is a frame, not a page that
+   grows: everything in the column is on screen, and the banner at the foot of
+   it cannot be pushed below a fold that should not exist -- which is where the
+   one warning about losing your progress had quietly gone. Nothing here
+   scrolls; a shorter window is a shorter ayah frame, not a longer page. */
+#app { height: 100dvh; display: flex; flex-direction: column; }
 
 .shell {
-  flex: 1;
+  /* min-height: 0, not the flex default of auto: `auto` is the ayah's own text
+     -- an ayah mid-split is momentarily taller than the frame it is being cut
+     down to fit, and an auto minimum lets that stretch the shell, which grows
+     the frame, which re-splits against a frame the text just moved. The column
+     is the window's height and the overflow of a verse is not allowed a vote. */
+  flex: 1; min-height: 0;
   width: 100%;
   background: var(--surface);
   /* `none` in every theme but paper, which lays a printed-page fall-off over
@@ -130,29 +140,37 @@ button {
 
 /* -------------------------------------------------------------------- reader */
 
-/* Centred in whatever height is left, so the ayah sits in the middle of the
-   frame instead of riding the top with a void underneath. */
-.reader { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
+/* Whatever height the header and the banner leave. Nothing is centred here:
+   the ayah below takes the leftover and centres its own text, so the column
+   fills the frame exactly rather than floating in it. */
+.reader { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
-/* The ayah takes whatever height is left over and then KEEPS it, whatever the
-   verse. A box that grew with its content moved the text on every change --
-   the frame re-centred under the reader's eye -- and it is what a long ayah
-   used to overflow. Now the frame is fixed and an ayah too long for it is read
-   in parts, so nothing about the type or the layout moves between ayat.
-   Centred inside, so a short ayah still sits in the middle rather than riding
-   the top with a void underneath. */
+/* The ayah takes everything the rest of the column does not, and then KEEPS
+   it, whatever the verse. A box that grew with its content moved the text on
+   every change -- the frame re-centred under the reader's eye -- and it is what
+   a long ayah used to overflow. Now the frame is fixed and an ayah too long for
+   it is read in parts, so nothing about the type or the layout moves between
+   ayat. Centred inside, so a short ayah still sits in the middle rather than
+   riding the top with a void underneath. */
 .ayah {
-  /* A definite height, not a share of what is left over. `flex: 1` bounds
-     nothing once the page outgrows the window -- the chain above goes
-     content-driven, the box grows to whatever the ayah needs, and the split
-     measures against that and concludes the ayah fits, which is how a long
-     ayah escaped paging entirely. Worse, the leftover moves with the length of
-     the TRANSLATION, so the same ayah at the same size split five ways one
-     moment and six the next. A viewport unit cannot be argued with by its own
-     content: the frame is the same for every ayah, and a translation too long
-     to sit under it scrolls the page as it always did.
-     min-height wins on a window too short for 68vh, which is the point. */
-  flex: none; height: 68vh; min-height: 300px;
+  /* `flex: 1` is a definite height here, not a content-driven one. It was 68vh
+     before, because back then the column could grow past the window: `flex: 1`
+     bounded nothing, the box grew to whatever the ayah needed, and the split
+     measured against that and concluded the ayah fits -- which is how a long
+     ayah escaped paging entirely. The column is now the window's height, this
+     may shrink inside it, and everything else in the column is sized off the
+     settings rather than off the verse. So the leftover is the same number for
+     every ayah, which is the one thing the split needs.
+     The other half of that promise is the translation box below: it is sized
+     from the SETTING and never from the text, or the leftover would move with
+     the length of the English and the same ayah would split five ways one
+     moment and six the next.
+     min-height: 0, and no floor under it: a floor is a height this box would
+     hold onto after the column has run out of room, and what is under it then
+     is the nav and the banner -- the ayah would simply be drawn over them. A
+     window too short to read in gives a short frame and more parts, which is
+     the honest answer, and it is the reader's window to resize. */
+  flex: 1; min-height: 0;
   display: flex; align-items: center; justify-content: center;
   padding: 32px 60px;
   /* overflow stays visible: Uthmani mark stacks sit well above the em box and
@@ -173,10 +191,29 @@ button {
 .ayah__text[data-font='amiri-quran'] { font-family: var(--font-amiri); }
 .ayah--changing .ayah__text { opacity: 0; }
 
-.translation { padding: 20px 26px 8px; text-align: center; }
+/* A definite height, computed from the translation SIZE and nothing else:
+   four lines of it plus the locator line under them. The ayah is sized against
+   what this leaves, so if this grew with the English then the frame -- and the
+   number of parts a long ayah is read in -- would change from ayah to ayah. A
+   translation longer than four lines scrolls inside the box instead, whole and
+   still one translation, exactly as it does in fullscreen. Capped against the
+   window so a large translation size cannot crowd the ayah out on a laptop. */
+.translation {
+  flex: none;
+  height: min(calc(6.2 * var(--trans-size, 18px) + 62px), 30vh);
+  display: grid; grid-template-rows: minmax(0, 1fr) auto;
+  padding: 20px 26px 8px; text-align: center;
+}
+/* Turning the translation off should give the ayah the room, not leave a hole
+   where the English was: with nothing to reserve, the box is just the locator. */
+.translation:has(> .translation__text[hidden]) { height: auto; }
 .translation__text {
   color: var(--secondary);
+  font-size: var(--trans-size, 18px);
   max-width: 820px; margin: 0 auto;
+  /* Centred in the room above the locator while it is short; scrolled once it
+     is not. The locator itself never moves either way. */
+  align-self: center; max-height: 100%; overflow-y: auto; overscroll-behavior: contain;
   line-height: 1.55; text-wrap: pretty;
 }
 .locator {
@@ -586,8 +623,10 @@ button {
      a narrow phone shows goal above timer rather than clipping the timer. */
   .hdr__metrics { gap: 6px 18px; justify-content: flex-start; flex-wrap: wrap; }
   .metric--time, .metric--streak, .metric--points { display: none; }
-  .ayah { min-height: 220px; padding: 24px 20px; }
-  .translation { padding: 16px 20px 8px; }
+  .ayah { padding: 24px 20px; }
+  /* A phone's lines are half a desktop's, so four of them hold half as much.
+     Five here, and the ayah still keeps the larger share of the screen. */
+  .translation { height: min(calc(7.75 * var(--trans-size, 18px) + 58px), 32vh); padding: 16px 20px 8px; }
   .nav { gap: 14px; }
   .nav__hint { display: none; }
   .stats { padding: 20px 16px; }
