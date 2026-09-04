@@ -1,0 +1,33 @@
+English translation
+===================
+
+"Quran in English", modern English translation, verse by verse.
+Translated by Talal Itani -- https://www.ClearQuran.com
+
+The text is reproduced verbatim; it has only been reshaped into JSON.
+
+NOTE ON THE LICENCE -- the two first-party statements disagree, so both are
+recorded here verbatim and neither is paraphrased.
+
+1. The current download page at https://blog.clearquran.com/download states:
+
+     "These Quran files are free to use, share, and distribute -- including in
+      commercial projects -- with no permission or authorization required. When
+      sharing, please keep the files unmodified and credit the source as shown
+      below. They are released under the Creative Commons
+      Attribution-NoDerivatives 4.0 International License (CC BY-ND 4.0)."
+
+2. The _readme.txt bundled inside the distributed archive (file dated
+   2015-01-18) states:
+
+     "These files can be shared and distributed
+      Provided under the Creative Commons License
+      Attribution-NonCommercial-NoDerivs"
+
+The bundled readme is the older of the two and is demonstrably stale in another
+respect: it describes the archive as the edition using "Allah", while the text
+it accompanies uses "God". The download page is the current, prominent,
+first-party grant. Both are recorded so the position can be re-examined.
+
+The difference only bites on commercial use. Under either licence the text must
+be distributed unmodified and credited.

@@ -1,0 +1,21 @@
+{
+  "note": "Checksums of the upstream sources this data was built from.",
+  "arabic": {
+    "url": "https://tanzil.net/pub/download/index.php?quranType=uthmani&outType=txt-2",
+    "file": "tanzil-uthmani.txt",
+    "bytes": 1370878,
+    "sha256": "bf4f57b968d03f4131c070b1e285da9be0e0a108a21c910e872801ca273312c8"
+  },
+  "meta": {
+    "url": "https://tanzil.net/res/text/metadata/quran-data.xml",
+    "file": "quran-data.xml",
+    "bytes": 77234,
+    "sha256": "8867c1d88191472adec9db694b3cd9f135b1a2ef580574d32cf888dcb22c5c7a"
+  },
+  "english": {
+    "url": "https://www.clearquran.com/downloads/quran-verse-by-verse-text.zip",
+    "file": "clearquran.zip",
+    "bytes": 1198126,
+    "sha256": "0ff47630e4650c845e596b4dca167d334302a06c52cdd5604be59feaafb35366"
+  }
+}

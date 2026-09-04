@@ -1,0 +1,20 @@
+{
+  "name": "qread",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "node --test --experimental-strip-types \"test/*.test.ts\"",
+    "data": "node --experimental-strip-types scripts/build-data.ts",
+    "fonts": "node --experimental-strip-types scripts/build-fonts.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vite-plugin-pwa": "^0.21.1"
+  }
+}

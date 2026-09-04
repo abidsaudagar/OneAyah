@@ -1,0 +1,118 @@
+/*
+ * FROZEN CONTRACT. Palette extracted verbatim from `.design/Quran Reader.dc.html`.
+ * Every colour in the app must come from a token here -- no literals in component CSS.
+ *
+ * Three axes compose independently:
+ *   theme  : light | dark   (:root vs [data-theme="dark"])
+ *   accent : blue | green | purple | black ([data-accent])
+ *   ramp   : derived from --accent via color-mix, so the heatmap follows the accent
+ */
+
+:root {
+  /* --- accent, overridden per [data-accent] below --- */
+  --accent: #2a6fd6;
+  --accent-hover: #1b56ac;
+
+  /* --- surfaces --- */
+  --bg: #eceded;
+  --surface: #fff;
+  --subtle: #f6f7f8;
+  --hover: #f2f3f4;
+
+  /* --- text --- */
+  --ink: #141618;
+  --secondary: #3d4348;
+  --muted: #8a9096;
+  --hairline: #c6cacd;
+  --faint: #a8adb2;
+
+  /* --- lines & tracks --- */
+  --border: rgba(0, 0, 0, 0.09);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --track: #eceef0;
+  --shadow-modal: 0 8px 30px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.07);
+
+  /* --- type --- */
+  --font-ui: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Every Arabic stack ends in a system Arabic face: a fallback without Arabic
+     coverage renders tofu boxes mid-ayah while the webfont loads. */
+  --font-amiri: "Amiri Quran", "Geeza Pro", "Noto Naskh Arabic", serif;
+  --font-naskh: "Noto Naskh Arabic", "Geeza Pro", serif;
+
+  /* --- radii --- */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 10px;
+
+  color-scheme: light;
+}
+
+/* Accents. Values are the four presets the design canvas exposes. */
+:root[data-accent="blue"]   { --accent: #2a6fd6; --accent-hover: #1b56ac; }
+:root[data-accent="green"]  { --accent: #1f7a5a; --accent-hover: #165b43; }
+:root[data-accent="purple"] { --accent: #8a5cd6; --accent-hover: #6d44b0; }
+:root[data-accent="black"]  { --accent: #141618; --accent-hover: #000; }
+
+/*
+ * Heatmap ramp, derived from the accent so all four presets get a coherent scale.
+ * Tuned to approximate the design's blue ramp (#eceef0 #c6dbf5 #83b0e8 #4a87da #1c56ab).
+ */
+:root {
+  --heat-0: var(--track);
+  --heat-1: color-mix(in oklab, var(--accent) 22%, var(--track));
+  --heat-2: color-mix(in oklab, var(--accent) 45%, var(--track));
+  --heat-3: color-mix(in oklab, var(--accent) 72%, var(--track));
+  --heat-4: color-mix(in oklab, var(--accent) 82%, #000);
+}
+
+/* Dark theme. Explicit choice wins; "system" falls through to the media query. */
+:root[data-theme="dark"] {
+  --bg: #0f1113;
+  --surface: #16181a;
+  --subtle: #1c1f22;
+  --hover: #232629;
+
+  --ink: #e8eaec;
+  --secondary: #b4babf;
+  --muted: #868c92;
+  --hairline: #4a5054;
+  --faint: #6b7176;
+
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --track: #26292c;
+  --shadow-modal: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+}
+
+/* Black accent is unreadable on a dark ground; lift it to near-white. */
+:root[data-theme="dark"][data-accent="black"] { --accent: #e8eaec; --accent-hover: #fff; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1113;
+    --surface: #16181a;
+    --subtle: #1c1f22;
+    --hover: #232629;
+
+    --ink: #e8eaec;
+    --secondary: #b4babf;
+    --muted: #868c92;
+    --hairline: #4a5054;
+    --faint: #6b7176;
+
+    --border: rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --track: #26292c;
+    --shadow-modal: 0 8px 30px rgba(0, 0, 0, 0.5);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+    color-scheme: dark;
+  }
+  :root:not([data-theme="light"])[data-accent="black"] { --accent: #e8eaec; --accent-hover: #fff; }
+}
