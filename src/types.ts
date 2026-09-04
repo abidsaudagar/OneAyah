@@ -53,7 +53,38 @@ export const DAY_ROLLOVER_HOUR = 3;
 
 /* ---------- settings ---------- */
 
-export type ArabicFont = 'amiri-quran' | 'noto-naskh';
+export type ArabicFont = 'al-qalam-indopak' | 'amiri-quran';
+
+/** In the order the settings panel offers them; the default leads. */
+export const ARABIC_FONTS: readonly ArabicFont[] = ['al-qalam-indopak', 'amiri-quran'] as const;
+
+/**
+ * Fonts that were once shipped and no longer are, and what a reader holding one
+ * should get instead. Never the default: `noto-naskh` set Uthmani text, and
+ * moving that reader to Indo-Pak would change the orthography under them, which
+ * is a bigger change than the face they actually lost.
+ */
+export const RETIRED_FONTS: Readonly<Record<string, ArabicFont>> = {
+  'noto-naskh': 'amiri-quran',
+};
+
+/**
+ * The orthography a face is cut for. Indo-Pak is a different text, not a
+ * restyling of the same one -- `ٱلْحَمْدُ` in Uthmani is `اَ لۡحَمۡدُ` in
+ * Indo-Pak -- so choosing that font also switches which text is fetched.
+ */
+export type ArabicScript = 'uthmani' | 'indopak';
+
+export const SCRIPT_OF: Readonly<Record<ArabicFont, ArabicScript>> = {
+  'al-qalam-indopak': 'indopak',
+  'amiri-quran': 'uthmani',
+};
+
+/** Data directory per script. */
+export const SCRIPT_DIR: Readonly<Record<ArabicScript, string>> = {
+  uthmani: 'ar-uthmani',
+  indopak: 'ar-indopak',
+};
 export type Theme = 'light' | 'dark' | 'system';
 export type Accent = 'blue' | 'green' | 'purple' | 'black';
 

@@ -8,9 +8,11 @@
   src: url('/fonts/amiri-quran-arabic.woff2') format('woff2');
   font-weight: 400; font-style: normal; font-display: swap;
 }
+/* Indo-Pak. Unlike the two above this one is not a Google subset -- it is the
+   whole face, and it is the only one the Indo-Pak text renders correctly in. */
 @font-face {
-  font-family: 'Noto Naskh Arabic';
-  src: url('/fonts/noto-naskh-arabic.woff2') format('woff2');
+  font-family: 'Al Qalam Quran Majeed';
+  src: url('/fonts/al-qalam-quran-majeed.woff2') format('woff2');
   font-weight: 400; font-style: normal; font-display: swap;
 }
 @font-face {

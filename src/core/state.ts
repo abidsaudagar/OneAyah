@@ -14,7 +14,7 @@ import { currentStreak, daysRead, daysSinceStart, longestStreak, type DayMap } f
 import { recomputeUnlockedMax, selectableRungs } from './unlock.ts';
 
 export const DEFAULT_SETTINGS: Settings = {
-  arabicFont: 'amiri-quran',
+  arabicFont: 'al-qalam-indopak',
   showTranslation: false,
   arabicSize: 64,
   translationSize: 18,

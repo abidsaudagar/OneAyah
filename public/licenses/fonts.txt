@@ -1,21 +1,39 @@
 Fonts
 =====
 
-All fonts here are licensed under the SIL Open Font License, Version 1.1.
-https://openfontlicense.org
+SIL Open Font License 1.1 -- https://openfontlicense.org
+--------------------------------------------------------
 
 Amiri Quran
   Copyright (c) 2010-2021, Khaled Hosny and contributors
   https://github.com/aliftype/amiri
 
-Noto Naskh Arabic
-  Copyright (c) 2022, Google LLC
-  https://github.com/notofonts/arabic
-
 IBM Plex Mono
   Copyright (c) 2017, IBM Corp.
   https://github.com/IBM/plex
 
-The files shipped here are the Arabic and Latin subsets as served by Google
-Fonts. They are redistributed unmodified. The OFL permits this; it forbids
-selling the fonts on their own, which is not what is happening here.
+These are the Arabic and Latin subsets as served by Google Fonts,
+redistributed unmodified. The OFL permits this; it forbids selling the fonts on
+their own, which is not what is happening here.
+
+Al Qalam Quran Majeed -- NO PUBLISHED LICENCE
+---------------------------------------------
+
+  (c) Al Qalam. Credits: Abdul Majeed Khan, Arif Karim, Shakir-ul-Qadree, Jawad
+  Version 2.00, 2 December 2009
+  Stated vendor URL: http://www.alqlm.org/fonts  (404 as of 2026-09; the site
+  no longer serves the page the font's own metadata points at)
+
+This is the Indo-Pak face. Its position is weaker than the other three and is
+recorded plainly rather than glossed:
+
+  - The font carries no licence text and no licence URL beyond the dead vendor
+    page. Its OS/2 fsType is 0x0004, "preview and print" embedding.
+  - It has been distributed as a free download for over a decade and is used by
+    Qur'an software widely, including Quran.com's earlier frontend.
+  - The copy shipped here is redistributed byte-for-byte, unmodified, pinned by
+    sha256, with the authors credited above.
+
+Nothing here is sold, and the font is served only to render the Qur'an. If the
+rights holder states terms this does not satisfy, replace the file: the reader
+falls back to the system Arabic face and keeps working.

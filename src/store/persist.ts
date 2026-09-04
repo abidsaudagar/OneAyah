@@ -5,7 +5,8 @@ import { initialState } from '../core/state.ts';
 import { createStore, quarantine, type Store, type WriteResult } from '../platform/storage.ts';
 import { DEFAULT_SETTINGS } from '../core/state.ts';
 import {
-  RUNGS, SESSION_LENGTHS, type PersistedState, type Rung, type Settings,
+  ARABIC_FONTS, RETIRED_FONTS, RUNGS, SESSION_LENGTHS,
+  type ArabicFont, type PersistedState, type Rung, type Settings,
 } from '../types.ts';
 
 export const STORAGE_KEY = 'qread.state.v1';
@@ -28,8 +29,10 @@ export function repair(raw: unknown, nowMs: number): PersistedState | null {
   s.arabicSize = clamp(Number(s.arabicSize) || DEFAULT_SETTINGS.arabicSize, 24, 200);
   s.translationSize = clamp(Number(s.translationSize) || DEFAULT_SETTINGS.translationSize, 12, 40);
   if (!SESSION_LENGTHS.includes(s.sessionLen)) s.sessionLen = DEFAULT_SETTINGS.sessionLen;
-  if (s.arabicFont !== 'amiri-quran' && s.arabicFont !== 'noto-naskh') {
-    s.arabicFont = DEFAULT_SETTINGS.arabicFont;
+  if (!ARABIC_FONTS.includes(s.arabicFont as ArabicFont)) {
+    // A font that was dropped hands its readers on to its nearest survivor;
+    // anything else -- junk, a typo, a hand-edited backup -- takes the default.
+    s.arabicFont = RETIRED_FONTS[s.arabicFont as string] ?? DEFAULT_SETTINGS.arabicFont;
   }
   if (s.autoAdvanceSec !== null) s.autoAdvanceSec = clamp(Number(s.autoAdvanceSec) || 12, 5, 30);
   s.showTranslation = s.showTranslation === true;

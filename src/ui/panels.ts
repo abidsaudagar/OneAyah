@@ -10,7 +10,7 @@ import { goalBonus, pointsPerVerse } from '../core/scoring.ts';
 import type { Snapshot } from '../core/state.ts';
 import { unlockProgress } from '../core/unlock.ts';
 import {
-  RUNGS, SESSION_LABELS, SESSION_LENGTHS, UNLOCK_DAYS,
+  RUNGS, SCRIPT_OF, SESSION_LABELS, SESSION_LENGTHS, UNLOCK_DAYS,
   type Accent, type ArabicFont, type Rung, type SessionLen, type Settings, type Theme,
 } from '../types.ts';
 import { clockText, el, num } from './dom.ts';
@@ -159,9 +159,23 @@ export function openUpgradeGate(snap: Snapshot, days: Parameters<typeof unlockPr
 
 /* ----------------------------------------------------------------- settings */
 
-const FONTS: { id: ArabicFont; label: string }[] = [
-  { id: 'amiri-quran', label: 'AMIRI QURAN' },
-  { id: 'noto-naskh', label: 'NOTO NASKH ARABIC' },
+/**
+ * One face per script, so this choice is the script -- which is why it is
+ * labelled that way and each option names the text it sets, not just the font.
+ */
+const FONTS: { id: ArabicFont; label: string; family: string; note: string }[] = [
+  {
+    id: 'al-qalam-indopak',
+    label: 'INDO-PAK',
+    family: 'var(--font-indopak)',
+    note: 'Al Qalam Quran Majeed',
+  },
+  {
+    id: 'amiri-quran',
+    label: 'UTHMANI',
+    family: 'var(--font-amiri)',
+    note: 'Amiri Quran',
+  },
 ];
 const ACCENTS: { id: Accent; hex: string }[] = [
   { id: 'blue', hex: '#2a6fd6' }, { id: 'green', hex: '#1f7a5a' },
@@ -192,7 +206,7 @@ export function openSettings(
     },
       el('h2', { class: 'panel__title', style: 'margin-bottom:20px', text: 'Reading settings' }),
 
-      el('div', { class: 'panel__section', text: 'ARABIC FONT' }),
+      el('div', { class: 'panel__section', text: 'ARABIC SCRIPT' }),
       el('div', { class: 'opts' }, ...FONTS.map((f) => el('button', {
         class: 'font-opt',
         attrs: { type: 'button', role: 'radio', 'aria-checked': settings.arabicFont === f.id },
@@ -200,10 +214,11 @@ export function openSettings(
       },
         el('div', {
           class: 'font-opt__sample',
-          style: `font-family:${f.id === 'amiri-quran' ? 'var(--font-amiri)' : 'var(--font-naskh)'}`,
-          text: 'بِسْمِ ٱللَّهِ',
+          style: `font-family:${f.family}`,
+          text: SCRIPT_OF[f.id] === 'indopak' ? 'بِسۡمِ اللهِ' : 'بِسْمِ ٱللَّهِ',
         }),
         el('div', { class: 'font-opt__name', text: f.label }),
+        el('div', { class: 'font-opt__note', text: f.note }),
       ))),
 
       stepper('Arabic size', `${settings.arabicSize} px · or press [ and ]`,
@@ -355,7 +370,7 @@ export function openAbout(): void {
     el('h2', { class: 'panel__title', text: 'Sources and licences' }),
     el('p', {
       class: 'panel__lede',
-      text: 'Both texts are reproduced verbatim and only reshaped into JSON. Nothing has been normalised, re-punctuated or corrected.',
+      text: 'Every text is reproduced verbatim and only reshaped into JSON. Nothing has been normalised, re-punctuated or corrected.',
     }),
     el('div', { style: 'font:400 12.5px/1.7 var(--font-ui);color:var(--secondary)' },
       el('p', { style: 'margin:0 0 12px' },
@@ -363,14 +378,20 @@ export function openAbout(): void {
         'Tanzil Qur’an Text (Uthmani) v1.1, © 2007–2021 Tanzil Project, licensed CC BY 3.0. ',
         el('a', { attrs: { href: 'https://tanzil.net', target: '_blank', rel: 'noreferrer' }, text: 'tanzil.net' })),
       el('p', { style: 'margin:0 0 12px' },
+        el('strong', { text: 'Indo-Pak text · ' }),
+        'Indo-Pak (Hanafi) script as served by the Quran.com API; the basmala is prefixed to opening ayat, as in the Uthmani text. ',
+        el('a', { attrs: { href: 'https://quran.com', target: '_blank', rel: 'noreferrer' }, text: 'quran.com' })),
+      el('p', { style: 'margin:0 0 12px' },
         el('strong', { text: 'English translation · ' }),
         '“Quran in English” by Talal Itani. ',
         el('a', { attrs: { href: 'https://www.clearquran.com', target: '_blank', rel: 'noreferrer' }, text: 'ClearQuran.com' })),
       el('p', { style: 'margin:0 0 12px' },
         el('strong', { text: 'Fonts · ' }),
-        'Amiri Quran, Noto Naskh Arabic and IBM Plex Mono, all under the SIL Open Font License 1.1.'),
+        'Amiri Quran and IBM Plex Mono under the SIL Open Font License 1.1. Al Qalam Quran Majeed publishes no licence; it is redistributed unmodified and credited.'),
       el('p', { style: 'margin:0' },
         el('a', { attrs: { href: `${base}licenses/tanzil.txt`, target: '_blank' }, text: 'Full notices' }),
+        ' · ',
+        el('a', { attrs: { href: `${base}licenses/indopak.txt`, target: '_blank' }, text: 'Indo-Pak text' }),
         ' · ',
         el('a', { attrs: { href: `${base}licenses/clearquran.txt`, target: '_blank' }, text: 'translation licence' }),
         ' · ',

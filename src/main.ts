@@ -21,7 +21,7 @@ import {
 import { ReaderView } from './ui/reader.ts';
 import { renderStats } from './ui/stats.ts';
 import { TvView } from './ui/tv.ts';
-import type { QuranMeta, Rung, Settings } from './types.ts';
+import { SCRIPT_OF, type ArabicFont, type ArabicScript, type QuranMeta, type Rung, type Settings } from './types.ts';
 
 const store = createAppStore();
 const app = qs<HTMLElement>('#app');
@@ -30,6 +30,16 @@ let meta: QuranMeta;
 let surah: Surah;
 let index = 0;
 let range: Range = 'year';
+
+/**
+ * The presentation the ayah on screen was last painted with, and the font that
+ * produced it. Settings reach the reader through `paintState`, which paints
+ * everything except the verse -- so a change made in the panel used to sit
+ * unapplied until the reader moved on. It cannot now: choosing the Indo-Pak
+ * face also changes which text is fetched.
+ */
+let shownKey = '';
+let shownFont: ArabicFont = store.get().settings.arabicFont;
 
 let tv: TvView | null = null;
 let autoTimer: number | undefined;
@@ -51,12 +61,15 @@ function applyAppearance(s: Settings): void {
 
 const globalId = () => globalIndex(meta, surah.meta.n, index + 1);
 
+/** Uthmani or Indo-Pak, decided by the chosen face. */
+const scriptNow = (): ArabicScript => SCRIPT_OF[store.get().settings.arabicFont];
+
 async function goToSurah(n: number, ayahIndex = 0): Promise<void> {
-  surah = await loadSurah(n);
+  surah = await loadSurah(n, scriptNow());
   index = Math.min(Math.max(0, ayahIndex), surah.meta.c - 1);
   paintVerse();
   store.dispatch({ t: 'setPosition', position: { surah: n, ayah: index + 1 } });
-  prefetchSurah(n + 1);
+  prefetchSurah(n + 1, scriptNow());
 }
 
 /**
@@ -74,7 +87,7 @@ async function step(direction: 1 | -1): Promise<void> {
   const next = index + direction;
   if (next < 0) {
     if (surah.meta.n === 1) return;
-    const prev = await loadSurah(surah.meta.n - 1);
+    const prev = await loadSurah(surah.meta.n - 1, scriptNow());
     await goToSurah(prev.meta.n, prev.meta.c - 1);
   } else if (next >= surah.meta.c) {
     if (surah.meta.n === 114) return;
@@ -83,7 +96,7 @@ async function step(direction: 1 | -1): Promise<void> {
     index = next;
     paintVerse();
     store.dispatch({ t: 'setPosition', position: { surah: surah.meta.n, ayah: index + 1 } });
-    if (index >= surah.meta.c - 5) prefetchSurah(surah.meta.n + 1);
+    if (index >= surah.meta.c - 5) prefetchSurah(surah.meta.n + 1, scriptNow());
   }
 }
 
@@ -215,7 +228,42 @@ function paintVerse(moved = true): void {
   const settings = store.get().settings;
   view.paintVerse(surah, index, settings);
   tv?.paintVerse(surah, index, settings);
+  shownKey = presentationKey(settings);
+  shownFont = settings.arabicFont;
   if (tv && moved) scheduleAuto();
+}
+
+/** Everything about the settings that the verse itself is painted from. */
+const presentationKey = (s: Settings): string => [
+  s.arabicFont, s.arabicSize, s.translationSize, s.showTranslation,
+].join('|');
+
+/**
+ * Re-fetches the ayah on screen in the other orthography. If it cannot be had
+ * -- offline, before the service worker has cached it -- the font choice is put
+ * back rather than rendering Uthmani glyphs in a face cut for Indo-Pak.
+ */
+async function showScript(script: ArabicScript, fallback: ArabicFont): Promise<void> {
+  // Claim the change before awaiting: every store notification during the fetch
+  // comes back through paintState, and a stale key there would start the same
+  // load again on each one.
+  shownKey = presentationKey(store.get().settings);
+  const n = surah.meta.n;
+
+  let next: Surah;
+  try {
+    next = await loadSurah(n, script);
+  } catch {
+    store.dispatch({ t: 'patchSettings', patch: { arabicFont: fallback } });
+    return;
+  }
+
+  // The reader can move while this is in flight; landing the old surah on top
+  // of the new one would silently rewind them.
+  if (surah.meta.n !== n) return;
+  surah = next;
+  paintVerse(false);
+  prefetchSurah(n + 1, script);
 }
 
 function paintState(): void {
@@ -226,6 +274,14 @@ function paintState(): void {
 
   const snap = store.snapshot();
   applyAppearance(snap.settings);
+
+  // A settings change reaches the ayah here, and only here.
+  if (presentationKey(snap.settings) !== shownKey) {
+    const script = SCRIPT_OF[snap.settings.arabicFont];
+    if (script === surah.script) paintVerse(false);
+    else void showScript(script, shownFont);
+  }
+
   view.paintState(snap, store.degraded);
   tv?.paintState(snap);
   if (statsHost !== null) paintStats(statsHost);

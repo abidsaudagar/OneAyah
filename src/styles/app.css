@@ -144,10 +144,12 @@ button {
   text-align: center;
   line-height: 1.9;
   text-wrap: pretty;
-  font-family: var(--font-amiri);
+  /* The default face; every paint stamps data-font, so this shows only in the
+     instant before the first ayah lands. */
+  font-family: var(--font-indopak);
   transition: opacity 0.12s ease;
 }
-.ayah__text[data-font='noto-naskh'] { font-family: var(--font-naskh); }
+.ayah__text[data-font='amiri-quran'] { font-family: var(--font-amiri); }
 .ayah--changing .ayah__text { opacity: 0; }
 
 .translation { padding: 20px 26px 8px; text-align: center; }
@@ -328,6 +330,7 @@ button {
 .font-opt__sample { font-size: 26px; direction: rtl; line-height: 1.6; }
 .font-opt__name { font: 500 10px/1 var(--font-mono); color: var(--muted); margin-top: 6px; }
 .font-opt[aria-checked='true'] .font-opt__name { color: var(--accent); }
+.font-opt__note { font: 400 10.5px/1.4 var(--font-ui); color: var(--muted); margin-top: 4px; }
 
 /* --------------------------------------------------------------- unlock gate */
 
@@ -471,7 +474,7 @@ button {
 .tv__ayah {
   width: 100%; text-align: center;
   direction: rtl; line-height: 1.95;
-  font-family: var(--font-amiri);
+  font-family: var(--font-indopak);
   font-size: 1em;
 }
 .tv__translation {
@@ -482,7 +485,7 @@ button {
      itself defaults to -- this is meant to be read from further away. */
   font-size: max(18px, 0.38em);
 }
-.tv__ayah[data-font='noto-naskh'] { font-family: var(--font-naskh); }
+.tv__ayah[data-font='amiri-quran'] { font-family: var(--font-amiri); }
 .tv__foot {
   position: absolute; bottom: 26px; left: 0; right: 0;
   display: flex; align-items: center; justify-content: center; gap: 20px;

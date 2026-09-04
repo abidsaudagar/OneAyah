@@ -26,14 +26,19 @@ Zero runtime dependencies. Measured gzipped, which is what GitHub Pages serves.
 
 | | gzip |
 |---|---|
-| App shell (JS + CSS + HTML) | 19.7 KB |
-| Fonts (Amiri Quran, Noto Naskh, IBM Plex Mono) | 126 KB |
-| First visit — shell + fonts + Al-Fātiḥah | **148 KB** |
-| Complete Qur'an, both texts, cached for offline | 622 KB |
-| Everything, once fully offline | 767 KB |
+| App shell (JS + CSS + HTML) | 20.3 KB |
+| Fonts (Al Qalam, Amiri Quran, IBM Plex Mono) | 137 KB |
+| First visit — shell + fonts + Al-Fātiḥah | **161 KB** |
+| Complete Qur'an, all three texts, cached for offline | 973 KB |
+| Everything, once fully offline | 1.10 MB |
 
 Only the current surah is fetched; the service worker precaches the rest in the
 background. Al-Baqarah, the largest surah, is 17.7 KB brotli on its own.
+
+The Indo-Pak script is a second Arabic text, not a second font over the first,
+so it costs a further 350 KB. It is precached with everything else, which is
+what makes switching script work on a plane -- and what makes a reader who
+never leaves Uthmani pay for it too.
 
 ## Keyboard
 
@@ -78,8 +83,17 @@ banked at the boundary, because points land per verse as they are read.
 | Asset | Source | Licence |
 |---|---|---|
 | Arabic text (Uthmani) | [Tanzil Project](https://tanzil.net) v1.1 | CC BY 3.0, verbatim only |
+| Arabic text (Indo-Pak) | [Quran.com API v4](https://api.quran.com/api/v4/quran/verses/indopak) | none published; see `public/licenses/indopak.txt` |
 | English translation | *Quran in English*, Talal Itani, [ClearQuran](https://www.clearquran.com) | see `public/licenses/clearquran.txt` |
-| Amiri Quran, Noto Naskh Arabic | aliftype / notofonts | SIL OFL 1.1 |
+| Amiri Quran | aliftype | SIL OFL 1.1 |
+| Al Qalam Quran Majeed | Abdul Majeed Khan et al. | none published; see `public/licenses/fonts.txt` |
 
-Both texts are reproduced verbatim and only reshaped into JSON. Full notices are
-in `public/licenses/` and shown in the app.
+Every text is reproduced verbatim and only reshaped into JSON. The one exception
+is recorded where it happens: the Indo-Pak source carries no basmala on the
+opening ayah of a surah, so it is prefixed there from the text's own 1:1, which
+is what the Uthmani text already does.
+
+Two of the assets ship without a published licence -- the Indo-Pak text and the
+Al Qalam face. Both are long-standing free downloads, redistributed unmodified
+and credited, and both are named here rather than quietly folded into the OFL
+line above. Full notices are in `public/licenses/` and shown in the app.

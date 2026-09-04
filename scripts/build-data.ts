@@ -3,7 +3,7 @@
  *
  *   node --experimental-strip-types scripts/build-data.ts
  *
- * Downloads the three licensed sources, verifies them against counts that act as
+ * Downloads the four licensed sources, verifies them against counts that act as
  * their own checksums, and emits the static JSON the app ships.
  *
  * The licensed text is never altered. Reshaping into JSON is permitted by both
@@ -45,6 +45,13 @@ const SOURCES = {
   english: {
     url: 'https://www.clearquran.com/downloads/quran-verse-by-verse-text.zip',
     file: 'clearquran.zip',
+  },
+  // Indo-Pak orthography is a different text, not a different font: the same
+  // ayah is spelled `اَ لۡحَمۡدُ` here and `ٱلْحَمْدُ` in Tanzil's Uthmani. An
+  // Indo-Pak face over Uthmani text renders neither one correctly.
+  indopak: {
+    url: 'https://api.quran.com/api/v4/quran/verses/indopak',
+    file: 'quran-indopak.json',
   },
 } as const;
 
@@ -94,6 +101,50 @@ function parseArabic(raw: string): Map<number, string[]> {
   }
 
   if (seen !== TOTAL_AYAT) throw new Error(`Arabic: expected ${TOTAL_AYAT} ayat, got ${seen}`);
+  return bySurah;
+}
+
+/** The shape quran.com's API returns; only these two fields are read. */
+interface IndopakVerse { verse_key: string; text_indopak: string }
+
+/**
+ * quran.com's Indo-Pak text, as `{ verses: [{ verse_key, text_indopak }] }`.
+ *
+ * Unlike Tanzil's `txt-2`, it carries no basmala on the opening ayah of a
+ * surah. The Uthmani text already shipped here does, and the reader shows one
+ * ayah at a time -- so switching script would make the basmala silently
+ * disappear. It is prefixed here for the 112 surahs that carry one (every surah
+ * but al-Fatihah, whose 1:1 IS the basmala, and at-Tawbah, which has none),
+ * using 1:1's own glyphs and the same single space Tanzil uses. That is
+ * assembly of two verbatim strings, not editing: no character is altered.
+ */
+function parseIndopak(raw: string): Map<number, string[]> {
+  const bySurah = new Map<number, string[]>();
+  const verses = (JSON.parse(raw) as { verses?: IndopakVerse[] }).verses ?? [];
+
+  for (const v of verses) {
+    const [surah, ayah] = v.verse_key.split(':').map(Number);
+    if (!surah || !ayah) throw new Error(`Indo-Pak: bad verse key ${v.verse_key}`);
+
+    const list = bySurah.get(surah) ?? [];
+    if (list.length !== ayah - 1) {
+      throw new Error(`Indo-Pak ${surah}:${ayah} arrived out of order`);
+    }
+    list.push(v.text_indopak);
+    bySurah.set(surah, list);
+  }
+
+  if (verses.length !== TOTAL_AYAT) {
+    throw new Error(`Indo-Pak: expected ${TOTAL_AYAT} ayat, got ${verses.length}`);
+  }
+
+  const basmala = bySurah.get(1)?.[0];
+  if (!basmala) throw new Error('Indo-Pak: 1:1 missing, nothing to prefix with');
+  for (const [n, ayat] of bySurah) {
+    if (n === 1 || n === 9) continue;
+    ayat[0] = `${basmala} ${ayat[0]}`;
+  }
+
   return bySurah;
 }
 
@@ -185,10 +236,11 @@ const kb = (n: number) => `${(n / 1024).toFixed(0)} KB`;
 
 async function main() {
   console.log('sources');
-  const [arabicBuf, metaBuf, englishBuf] = await Promise.all([
+  const [arabicBuf, metaBuf, englishBuf, indopakBuf] = await Promise.all([
     fetchCached(SOURCES.arabic.url, SOURCES.arabic.file),
     fetchCached(SOURCES.meta.url, SOURCES.meta.file),
     fetchCached(SOURCES.english.url, SOURCES.english.file),
+    fetchCached(SOURCES.indopak.url, SOURCES.indopak.file),
   ]);
 
   const unpacked = join(CACHE, 'clearquran');
@@ -203,17 +255,20 @@ async function main() {
   console.log('\nparsing');
   const meta = parseMeta(metaBuf.toString('utf8'));
   const arabic = parseArabic(arabicBuf.toString('utf8'));
+  const indopak = parseIndopak(indopakBuf.toString('utf8'));
   const english = parseEnglish(unpacked);
-  console.log(`  ${TOTAL_SURAHS} surahs, ${TOTAL_JUZ} juz, ${TOTAL_AYAT} ayat x2 texts`);
+  console.log(`  ${TOTAL_SURAHS} surahs, ${TOTAL_JUZ} juz, ${TOTAL_AYAT} ayat x3 texts`);
 
   console.log('\nemitting');
   const metaBytes = writeJson(join(DATA, 'meta.json'), meta);
   const arBytes = emitTexts('ar-uthmani', arabic, meta);
+  const ipBytes = emitTexts('ar-indopak', indopak, meta);
   const enBytes = emitTexts('en-itani', english, meta);
 
   mkdirSync(LICENSES, { recursive: true });
   writeFileSync(join(LICENSES, 'tanzil.txt'), TANZIL_NOTICE);
   writeFileSync(join(LICENSES, 'clearquran.txt'), CLEARQURAN_NOTICE);
+  writeFileSync(join(LICENSES, 'indopak.txt'), INDOPAK_NOTICE);
   writeFileSync(
     join(ROOT, 'scripts', 'sources.json'),
     `${JSON.stringify(
@@ -222,6 +277,7 @@ async function main() {
         arabic: { ...SOURCES.arabic, bytes: arabicBuf.length, sha256: sha256(arabicBuf) },
         meta: { ...SOURCES.meta, bytes: metaBuf.length, sha256: sha256(metaBuf) },
         english: { ...SOURCES.english, bytes: englishBuf.length, sha256: sha256(englishBuf) },
+        indopak: { ...SOURCES.indopak, bytes: indopakBuf.length, sha256: sha256(indopakBuf) },
       },
       null,
       2,
@@ -230,8 +286,9 @@ async function main() {
 
   console.log(`  meta.json    ${kb(metaBytes)}`);
   console.log(`  ar-uthmani   ${kb(arBytes)} across ${TOTAL_SURAHS} files`);
+  console.log(`  ar-indopak   ${kb(ipBytes)} across ${TOTAL_SURAHS} files`);
   console.log(`  en-itani     ${kb(enBytes)} across ${TOTAL_SURAHS} files`);
-  console.log(`  licenses     2 files\n`);
+  console.log(`  licenses     3 files\n`);
 }
 
 /* ------------------------------------------------------------------- notices */
@@ -248,6 +305,34 @@ This text has been reshaped into JSON for delivery. The text itself is
 reproduced verbatim: no characters have been added, removed or altered.
 
 Please check updates at: https://tanzil.net/updates/
+`;
+
+const INDOPAK_NOTICE = `Indo-Pak Arabic Qur'an text
+==============================
+
+Indo-Pak (Hanafi) script, as served by the Quran.com API v4:
+https://api.quran.com/api/v4/quran/verses/indopak
+
+This is the refined Indo-Pak text maintained for Quran.com and QuranWBW.com,
+which follows the Indo-Pak mushaf convention rather than the Uthmani one -- a
+different orthography, not a restyling: the same ayah is written with different
+characters in each.
+
+The verse text is reproduced verbatim. Two things are done to it, both
+mechanical and both recorded here rather than hidden:
+
+  1. It is reshaped into the same array-per-surah JSON the other texts use.
+  2. The basmala is prefixed to the opening ayah of the 112 surahs that carry
+     one, using the glyphs of 1:1 and a single space -- exactly what the Tanzil
+     Uthmani text already shipped here does. Nothing is otherwise added,
+     removed, reordered or normalised.
+
+LICENCE -- the API publishes no licence statement for this text. Quran.com
+serves it publicly and without restriction, and the underlying Indo-Pak text is
+distributed openly through the Quranic Universal Library (qul.tarteel.ai, by
+Tarteel AI). No claim of ownership is made here, and the text is redistributed
+unmodified beyond the two mechanical steps above. If the maintainers state
+terms that this does not satisfy, this file should be revisited.
 `;
 
 const CLEARQURAN_NOTICE = `English translation

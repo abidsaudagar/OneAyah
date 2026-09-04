@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { repair } from '../src/store/persist.ts';
 import { initialState, reduce } from '../src/core/state.ts';
-import type { PersistedState } from '../src/types.ts';
+import { ARABIC_FONTS, type PersistedState } from '../src/types.ts';
 
 const NOW = Date.UTC(2026, 8, 4, 12);
 
@@ -51,8 +51,24 @@ describe('backup and repair', () => {
     assert.equal(out.settings.arabicSize, 200);
     assert.equal(out.settings.translationSize, 12);
     assert.equal(out.settings.sessionLen, 70);
-    assert.equal(out.settings.arabicFont, 'amiri-quran');
+    assert.equal(out.settings.arabicFont, 'al-qalam-indopak');
     assert.equal(out.settings.autoAdvanceSec, 30);
+  });
+
+  it('hands a reader of the retired Noto face to Amiri, not to the default', () => {
+    // The default is now Indo-Pak, which is a different orthography. Someone who
+    // chose Noto was reading Uthmani; they should still be.
+    const s = withReading();
+    const out = repair({ ...s, settings: { ...s.settings, arabicFont: 'noto-naskh' } }, NOW)!;
+    assert.equal(out.settings.arabicFont, 'amiri-quran');
+  });
+
+  it('keeps every font the app actually ships, Indo-Pak included', () => {
+    const s = withReading();
+    for (const font of ARABIC_FONTS) {
+      const out = repair({ ...s, settings: { ...s.settings, arabicFont: font } }, NOW)!;
+      assert.equal(out.settings.arabicFont, font);
+    }
   });
 
   it('will not let a backup grant an unearned rung', () => {

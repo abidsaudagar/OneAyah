@@ -1,0 +1,26 @@
+Indo-Pak Arabic Qur'an text
+==============================
+
+Indo-Pak (Hanafi) script, as served by the Quran.com API v4:
+https://api.quran.com/api/v4/quran/verses/indopak
+
+This is the refined Indo-Pak text maintained for Quran.com and QuranWBW.com,
+which follows the Indo-Pak mushaf convention rather than the Uthmani one -- a
+different orthography, not a restyling: the same ayah is written with different
+characters in each.
+
+The verse text is reproduced verbatim. Two things are done to it, both
+mechanical and both recorded here rather than hidden:
+
+  1. It is reshaped into the same array-per-surah JSON the other texts use.
+  2. The basmala is prefixed to the opening ayah of the 112 surahs that carry
+     one, using the glyphs of 1:1 and a single space -- exactly what the Tanzil
+     Uthmani text already shipped here does. Nothing is otherwise added,
+     removed, reordered or normalised.
+
+LICENCE -- the API publishes no licence statement for this text. Quran.com
+serves it publicly and without restriction, and the underlying Indo-Pak text is
+distributed openly through the Quranic Universal Library (qul.tarteel.ai, by
+Tarteel AI). No claim of ownership is made here, and the text is redistributed
+unmodified beyond the two mechanical steps above. If the maintainers state
+terms that this does not satisfy, this file should be revisited.
