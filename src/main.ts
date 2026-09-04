@@ -272,6 +272,16 @@ window.addEventListener('keydown', (e) => {
   // Leave browser and OS chords alone; these are bare keys only.
   if (e.metaKey || e.ctrlKey || e.altKey) return;
 
+  // A held key auto-repeats at the OS rate, which is far faster than anyone
+  // can read an ayah. Every key here is a discrete act -- move, toggle, leave
+  // -- and wants one tap per step, so the repeats are dropped. Text size is
+  // the one exception below: holding [ or ] to scale smoothly is the point.
+  if (e.repeat && e.key !== '[' && e.key !== ']') {
+    // Still swallow the key so the page does not scroll under a held arrow.
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') e.preventDefault();
+    return;
+  }
+
   switch (e.key) {
     case 'ArrowRight': e.preventDefault(); void step(1); break;
     case 'ArrowLeft': e.preventDefault(); void step(-1); break;

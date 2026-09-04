@@ -8,7 +8,7 @@
  * a fixed dwell and then moves on. It is not scrolling text.
  */
 import type { Snapshot } from '../core/state.ts';
-import { clockText, el } from './dom.ts';
+import { clockText, el, tapOnly } from './dom.ts';
 import type { Surah } from '../data/quran.ts';
 
 export interface TvCallbacks {
@@ -38,8 +38,14 @@ export class TvView {
       this.elAyah,
       // Large invisible halves, so a propped-up tablet or a cast screen stays
       // usable without a keyboard. RTL: the right half goes back.
-      el('button', { class: 'tv__tap tv__tap--prev', attrs: { 'aria-label': 'Previous ayah' }, on: { click: cb.onPrev } }),
-      el('button', { class: 'tv__tap tv__tap--next', attrs: { 'aria-label': 'Next ayah' }, on: { click: cb.onNext } }),
+      el('button', {
+        class: 'tv__tap tv__tap--prev', attrs: { 'aria-label': 'Previous ayah' },
+        on: { click: cb.onPrev, keydown: tapOnly },
+      }),
+      el('button', {
+        class: 'tv__tap tv__tap--next', attrs: { 'aria-label': 'Next ayah' },
+        on: { click: cb.onNext, keydown: tapOnly },
+      }),
       el('div', { class: 'tv__foot' },
         this.elAuto,
         el('span', { text: '← → TO MOVE THROUGH THE AYAT · ESC TO EXIT' })),

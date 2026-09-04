@@ -7,7 +7,7 @@
  */
 import type { Snapshot } from '../core/state.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
-import { clockText, el, num, type Child } from './dom.ts';
+import { clockText, el, num, tapOnly, type Child } from './dom.ts';
 import type { Surah } from '../data/quran.ts';
 
 export interface ReaderCallbacks {
@@ -133,11 +133,13 @@ export class ReaderView {
 
     this.elPrev = el('button', {
       class: 'nav__arrow', text: '←',
-      attrs: { type: 'button', 'aria-label': 'Previous ayah' }, on: { click: cb.onPrev },
+      attrs: { type: 'button', 'aria-label': 'Previous ayah' },
+      on: { click: cb.onPrev, keydown: tapOnly },
     });
     this.elNext = el('button', {
       class: 'nav__arrow', text: '→',
-      attrs: { type: 'button', 'aria-label': 'Next ayah' }, on: { click: cb.onNext },
+      attrs: { type: 'button', 'aria-label': 'Next ayah' },
+      on: { click: cb.onNext, keydown: tapOnly },
     });
 
     this.elBanner = el('div', { class: 'banner', attrs: { hidden: true } });

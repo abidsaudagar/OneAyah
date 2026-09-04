@@ -40,6 +40,14 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/**
+ * A keydown guard for buttons that move the reader. Holding Enter on a focused
+ * button makes the browser fire keydown -- and therefore click -- at the OS
+ * repeat rate; swallowing the repeats keeps every arrow a one-tap-one-ayah
+ * control, matching how the same buttons behave under a held finger or mouse.
+ */
+export const tapOnly = (e: KeyboardEvent): void => { if (e.repeat) e.preventDefault(); };
+
 export function svg(tag: string, attrs: Record<string, string | number> = {}, ...children: Child[]) {
   const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
   for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
