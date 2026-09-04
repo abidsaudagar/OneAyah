@@ -483,6 +483,11 @@ button {
   display: flex; flex-direction: column; align-items: center; gap: 3vh;
   padding: 0 5vw;
 }
+/* The new ayah arrives already laid out but invisible, so the resize and the
+   re-centring happen in a frame the reader never sees. Only the fade up is
+   watched, and a fade carries no direction to follow. */
+@keyframes tv-verse-in { from { opacity: 0; } to { opacity: 1; } }
+.tv__stack--in { animation: tv-verse-in 0.16s ease-out; }
 .tv__ayah {
   width: 100%; text-align: center;
   direction: rtl; line-height: 1.95;

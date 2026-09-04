@@ -62,6 +62,9 @@ export class TvView {
 
   paintVerse(surah: Surah, index: number, settings: Snapshot['settings']): void {
     const text = surah.ar[index] ?? '';
+    // Only a real change earns the fade; a size nudge or a translation toggle
+    // repaints the same ayah and should not blink it.
+    const moved = text !== this.text;
     this.text = text;
     this.elAyah.textContent = text;
     this.elAyah.dataset.font = settings.arabicFont;
@@ -81,13 +84,40 @@ export class TvView {
     // measure-and-shrink pass has to re-run on every reflow, and one that
     // misfires leaves the reader staring at the wrong size with no way back.
     this.sizeStack(settings.showTranslation);
+    if (moved) this.markChanged();
   }
 
+  /**
+   * Size falls as one over the square root of the length. Text fills an area,
+   * and area grows with length times size squared, so this keeps roughly the
+   * same block of ink on screen whatever the ayah is.
+   *
+   * It replaces four length buckets. Their edges meant two ayat of near-equal
+   * length could land a third apart in size -- 3:5 at 105 characters rendered
+   * at 50px and 3:6 at 147 characters at 37px -- and crossing an edge read as a
+   * lurch. The constant is fitted to what those buckets already gave at their
+   * own boundaries, so no ayah is resized much; only the cliffs between them go.
+   */
   private sizeStack(showTranslation: boolean): void {
-    const len = this.text.length;
-    const vw = len > 220 ? 3.4 : len > 120 ? 4.6 : len > 60 ? 6.2 : 8.4;
+    const vw = Math.min(8.4, 68 / Math.sqrt(Math.max(1, this.text.length)));
     const scaled = showTranslation ? vw * 0.74 : vw;
     this.elStack.style.fontSize = `clamp(24px, ${scaled.toFixed(2)}vw, 160px)`;
+  }
+
+  /**
+   * The size and the line count both move with the ayah, and the stack is
+   * centred, so a swap in place pushes the text out from both ends at once --
+   * the reader's eye follows it. Cutting to the new ayah at zero opacity and
+   * fading it up puts the whole reflow behind a frame nobody sees: there is no
+   * motion to track, so it reads as a replacement rather than a slide. Short
+   * enough to keep up with a held arrow key, and reduced-motion collapses it
+   * back to the plain cut.
+   */
+  private markChanged(): void {
+    this.elStack.scrollTop = 0;
+    this.elStack.classList.remove('tv__stack--in');
+    void this.elStack.offsetWidth; // restart the animation
+    this.elStack.classList.add('tv__stack--in');
   }
 
   paintState(snap: Snapshot): void {
