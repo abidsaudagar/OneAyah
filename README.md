@@ -20,6 +20,43 @@ npm run build      # static output in dist/
 manual step -- the generated data is committed so ordinary builds need no
 network. It requires `unzip` on PATH.
 
+## What it weighs
+
+Zero runtime dependencies. Measured gzipped, which is what GitHub Pages serves.
+
+| | gzip |
+|---|---|
+| App shell (JS + CSS + HTML) | 19.7 KB |
+| Fonts (Amiri Quran, Noto Naskh, IBM Plex Mono) | 126 KB |
+| First visit — shell + fonts + Al-Fātiḥah | **148 KB** |
+| Complete Qur'an, both texts, cached for offline | 622 KB |
+| Everything, once fully offline | 767 KB |
+
+Only the current surah is fetched; the service worker precaches the rest in the
+background. Al-Baqarah, the largest surah, is 17.7 KB brotli on its own.
+
+## How the scoring works
+
+| rung | pts/verse | goal bonus | a full-goal day |
+|---|---|---|---|
+| 1 | 3 | 21 | 24 |
+| 3 | 4 | 28 | 40 |
+| 5 | 5 | 35 | 60 |
+| 10 | 7 | 49 | 119 |
+| 20 | 9 | 63 | 243 |
+| 30 | 10 | 70 | 370 |
+
+Streak multipliers are ×1.2 at 7 days, ×1.5 at 30, ×2.0 at 100. Verses beyond
+twice your goal earn half points -- bingeing is capped, showing up is not.
+
+Reading one verse keeps a streak alive. Hitting the goal is what earns the
+bonus, grows the multiplier, and counts toward unlocking rungs 20 and 30. The
+day rolls over at 3am, so reading at 1am still counts for the night before.
+
+A verse credits only when you move forward off it having spent
+`clamp(0.6s x words, 2s, 30s)` of *active* time on it. Holding the arrow key
+down advances the text and earns nothing.
+
 ## Sources and licences
 
 | Asset | Source | Licence |
