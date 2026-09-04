@@ -448,6 +448,8 @@ button {
   position: fixed; inset: 0; z-index: 30;
   background: var(--surface);
   display: flex; align-items: center; justify-content: center;
+  /* Keeps the reading area clear of the clock row and the footer hint. */
+  padding: 84px 0 64px;
 }
 .tv__clock {
   position: absolute; top: 26px; left: 32px;
@@ -457,11 +459,28 @@ button {
 .tv__goal { position: absolute; top: 26px; right: 32px; display: flex; align-items: center; gap: 12px; }
 .tv__goal .bar { width: 120px; height: 8px; margin: 0; border-radius: 4px; }
 .tv__count { font: 500 11px/1 var(--font-mono); color: var(--muted); }
+/* The stack owns the padding and the centring; the ayah and its translation
+   sit inside it, so showing the English shifts the pair, not the frame. Its
+   own font-size is the one number both are measured from, which is what lets
+   the fit pass in tv.ts scale them together. */
+.tv__stack {
+  width: 100%; max-height: 100%; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 3vh;
+  padding: 0 5vw;
+}
 .tv__ayah {
   width: 100%; text-align: center;
   direction: rtl; line-height: 1.95;
-  padding: 0 5vw;
   font-family: var(--font-amiri);
+  font-size: 1em;
+}
+.tv__translation {
+  margin: 0; max-width: min(66ch, 78vw); text-align: center;
+  color: var(--secondary); text-wrap: pretty;
+  font-family: var(--font-ui); font-weight: 400; line-height: 1.5;
+  /* Just over a third of the Arabic, and never below the 18px the reader
+     itself defaults to -- this is meant to be read from further away. */
+  font-size: max(18px, 0.38em);
 }
 .tv__ayah[data-font='noto-naskh'] { font-family: var(--font-naskh); }
 .tv__foot {

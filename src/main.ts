@@ -205,11 +205,17 @@ document.addEventListener('fullscreenchange', () => {
 
 /* ---------------------------------------------------------------- rendering */
 
-function paintVerse(): void {
+/**
+ * `moved` is false when the ayah on screen has not changed and only its
+ * presentation has -- a size nudge, translation on or off. Re-arming the
+ * auto-advance dwell there would let someone hold the overlay still by
+ * toggling, so the timer is left to run.
+ */
+function paintVerse(moved = true): void {
   const settings = store.get().settings;
   view.paintVerse(surah, index, settings);
   tv?.paintVerse(surah, index, settings);
-  if (tv) scheduleAuto();
+  if (tv && moved) scheduleAuto();
 }
 
 function paintState(): void {
@@ -256,13 +262,13 @@ function nudgeArabicSize(delta: number): void {
   const next = Math.min(200, Math.max(24, current + delta));
   if (next === current) return;
   store.dispatch({ t: 'patchSettings', patch: { arabicSize: next } });
-  paintVerse();
+  paintVerse(false);
 }
 
 function toggleTranslation(): void {
   const on = !store.get().settings.showTranslation;
   store.dispatch({ t: 'patchSettings', patch: { showTranslation: on } });
-  paintVerse();
+  paintVerse(false);
 }
 
 window.addEventListener('keydown', (e) => {
