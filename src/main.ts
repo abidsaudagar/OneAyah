@@ -152,6 +152,10 @@ const session = new Session({
 /* --------------------------------------------------------------- fullscreen */
 
 async function enterFullscreen(): Promise<void> {
+  // Entering twice would leak the first overlay and leave the visible one
+  // orphaned from `tv`, so its counters would never update again.
+  if (tv !== null) return;
+
   tv = new TvView({
     onPrev: () => void step(-1),
     onNext: () => void step(1),
@@ -183,9 +187,11 @@ function scheduleAuto(): void {
   clearTimeout(autoTimer);
   const chosen = store.get().settings.autoAdvanceSec;
   if (tv === null || chosen === null) return;
-  autoTimer = setTimeout(
-    () => { void step(1).then(scheduleAuto); }, chosen * 1000,
-  ) as unknown as number;
+  autoTimer = setTimeout(() => {
+    // Re-arm even if the step was a no-op -- at the last ayah of the Qur'an
+    // step() returns early, and chaining off it alone would stop the loop.
+    void step(1).finally(scheduleAuto);
+  }, chosen * 1000) as unknown as number;
 }
 
 // Browsers swallow Escape during native fullscreen, so the exit signal is the
@@ -204,6 +210,11 @@ function paintVerse(): void {
 }
 
 function paintState(): void {
+  // If the overlay ever leaves the document without going through
+  // exitFullscreen, `tv` would keep painting a detached node and the reader
+  // would watch a frozen counter. Drop it instead.
+  if (tv !== null && !tv.root.isConnected) tv = null;
+
   const snap = store.snapshot();
   applyAppearance(snap.settings);
   view.paintState(snap, store.degraded);
