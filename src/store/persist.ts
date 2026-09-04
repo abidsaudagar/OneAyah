@@ -32,6 +32,7 @@ export function repair(raw: unknown, nowMs: number): PersistedState | null {
     s.arabicFont = DEFAULT_SETTINGS.arabicFont;
   }
   if (s.autoAdvanceSec !== null) s.autoAdvanceSec = clamp(Number(s.autoAdvanceSec) || 12, 5, 30);
+  s.showTranslation = s.showTranslation === true;
 
   const days: PersistedState['days'] = {};
   for (const [k, v] of Object.entries(r.days ?? {})) {

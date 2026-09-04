@@ -9,7 +9,7 @@ import type { Snapshot } from '../core/state.ts';
 import { requiredDwellMsForWords } from '../core/dwell.ts';
 import { evaluateDwell } from '../core/dwell.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
-import { clockText, el, num } from './dom.ts';
+import { clockText, el, num, type Child } from './dom.ts';
 import type { Surah } from '../data/quran.ts';
 
 export interface ReaderCallbacks {
@@ -41,6 +41,7 @@ export class ReaderView {
   private readonly elAyahBox: HTMLElement;
   private readonly elTrans: HTMLElement;
   private readonly elLocator: HTMLElement;
+  private elHints!: HTMLElement;
   private readonly elGoalCount: HTMLElement;
   private readonly elGoalBar: HTMLElement;
   private readonly elTimer: HTMLElement;
@@ -59,30 +60,35 @@ export class ReaderView {
   private elBannerText!: HTMLElement;
 
   constructor(cb: ReaderCallbacks) {
-    const metric = (
-      cls: string, label: string, value: HTMLElement, tail: HTMLElement,
-    ) => el('div', { class: `metric ${cls}` },
-      el('div', { class: 'metric__label', text: label }), value, tail);
+    /** Label, value and any trailing detail on a single line, optionally underlined by a bar. */
+    const metric = (cls: string, label: string, parts: Child[], bar?: HTMLElement) =>
+      el('div', { class: `metric ${cls}` },
+        el('div', { class: 'metric__line' },
+          el('span', { class: 'metric__label', text: label }), ...parts),
+        bar);
 
-    this.elGoalCount = el('span', { text: '0/5' });
+    this.elGoalCount = el('span', { class: 'metric__value', text: '0/5' });
     this.elGoalBar = el('div', { class: 'bar__fill' });
-    this.elTimer = el('span', { text: '01:10' });
+    this.elTimer = el('span', { class: 'metric__value', text: '01:10' });
     this.elTimerOf = el('span', { class: 'metric__unit', text: 'of 1:10' });
     this.elTimerBar = el('div', { class: 'bar__fill bar__fill--instant' });
-    this.elRead = el('span', { text: '00:00' });
-    this.elReadAll = el('div', { class: 'metric__sub', text: '' });
-    this.elStreak = el('span', { text: '0' });
-    this.elMult = el('div', { class: 'metric__sub', text: 'multiplier ×1.0' });
-    this.elPoints = el('span', { text: '0' });
-    this.elPointsToday = el('div', { class: 'metric__sub', text: '' });
+    this.elRead = el('span', { class: 'metric__value', text: '00:00' });
+    this.elReadAll = el('span', { class: 'metric__sub', text: '' });
+    this.elStreak = el('span', { class: 'metric__value', text: '0' });
+    this.elMult = el('span', { class: 'metric__sub', text: '×1.0' });
+    this.elPoints = el('span', { class: 'metric__value', text: '0' });
+    this.elPointsToday = el('span', { class: 'metric__sub', text: '' });
 
     const goalBtn = el('button', {
       class: 'goal-btn', attrs: { type: 'button', title: 'Change your daily goal' },
       on: { click: cb.onOpenGoal },
     },
-      el('div', { class: 'metric__label', text: 'DAILY GOAL' }),
-      el('div', { class: 'metric__value' }, this.elGoalCount, el('span', { class: 'metric__unit', text: 'verses' })),
+      el('div', { class: 'metric__line' },
+        el('span', { class: 'metric__label', text: 'DAILY GOAL' }),
+        this.elGoalCount,
+        el('span', { class: 'metric__unit', text: 'verses' })),
       el('div', { class: 'bar' }, this.elGoalBar),
+      el('span', { class: 'metric__chip', text: 'GOAL MET' }),
     );
 
     const header = el('header', { class: 'hdr' },
@@ -101,17 +107,12 @@ export class ReaderView {
       ),
       el('div', { class: 'hdr__metrics' },
         el('div', { class: 'metric metric--goal' }, goalBtn),
-        metric('metric--session', 'SESSION LEFT',
-          el('div', { class: 'metric__value' }, this.elTimer, this.elTimerOf),
+        metric('metric--session', 'SESSION LEFT', [this.elTimer, this.elTimerOf],
           el('div', { class: 'bar' }, this.elTimerBar)),
-        metric('metric--time', 'TIME READ',
-          el('div', { class: 'metric__value' }, this.elRead), this.elReadAll),
+        metric('metric--time', 'TIME READ', [this.elRead, this.elReadAll]),
         metric('metric--streak metric--accent', 'STREAK',
-          el('div', { class: 'metric__value' }, this.elStreak,
-            el('span', { class: 'metric__unit', text: 'days' })),
-          this.elMult),
-        metric('metric--points', 'POINTS',
-          el('div', { class: 'metric__value' }, this.elPoints), this.elPointsToday),
+          [this.elStreak, el('span', { class: 'metric__unit', text: 'days' }), this.elMult]),
+        metric('metric--points', 'POINTS', [this.elPoints, this.elPointsToday]),
       ),
       el('div', { class: 'hdr__menu' },
         icon('<path d="M2 4.5h14M2 9h14M2 13.5h14"/>', 'Surahs', cb.onOpenDrawer)),
@@ -122,6 +123,9 @@ export class ReaderView {
     this.elDwell = el('div', { class: 'dwell__fill' });
     this.elTrans = el('p', { class: 'translation__text' });
     this.elLocator = el('div', { class: 'locator' });
+    this.elHints = el('div', { class: 'hints' },
+      ...([['← →', 'ayah'], ['[ ]', 'text size'], ['T', 'translation'], ['F', 'fullscreen']] as const)
+        .map(([k, what]) => el('span', {}, el('kbd', { text: k }), what)));
 
     this.elPrev = el('button', {
       class: 'nav__arrow', text: '←',
@@ -140,10 +144,8 @@ export class ReaderView {
         this.elAyahBox,
         el('div', { class: 'dwell' }, this.elDwell),
         el('div', { class: 'translation' }, this.elTrans, this.elLocator),
-        el('div', { class: 'nav' },
-          this.elPrev,
-          el('div', { class: 'nav__hint', text: 'ARROW KEYS FOR PREVIOUS / NEXT AYAH' }),
-          this.elNext),
+        el('div', { class: 'nav' }, this.elPrev, this.elNext),
+        this.elHints,
       ),
       this.elBanner,
     );
@@ -168,6 +170,7 @@ export class ReaderView {
     this.elAyah.style.fontSize = `${settings.arabicSize}px`;
     this.elTrans.textContent = surah.en[index] ?? '';
     this.elTrans.style.fontSize = `${settings.translationSize}px`;
+    this.elTrans.hidden = !settings.showTranslation;
     this.elLocator.textContent = `${surah.meta.tr} · ${index + 1} of ${surah.meta.c}`;
     this.elPrev.disabled = surah.meta.n === 1 && index === 0;
     this.elNext.disabled = surah.meta.n === 114 && index === surah.meta.c - 1;
@@ -180,12 +183,16 @@ export class ReaderView {
     this.elGoalBar.style.width = `${Math.min(100, (snap.versesToday / goal) * 100)}%`;
 
     this.elStreak.textContent = String(snap.streak.current);
-    this.elMult.textContent = `multiplier ×${snap.streak.multiplier.toFixed(1)}`;
+    this.elMult.textContent = `×${snap.streak.multiplier.toFixed(1)}`;
     this.elPoints.textContent = num(snap.totals.points);
-    this.elPointsToday.textContent = snap.pointsToday > 0 ? `+${num(snap.pointsToday)} today` : '';
+    this.elPointsToday.textContent = snap.pointsToday > 0 ? `+${num(snap.pointsToday)}` : '';
     this.elReadAll.textContent = snap.totals.seconds > 0
-      ? `${(snap.totals.seconds / 3600).toFixed(snap.totals.seconds >= 36_000 ? 0 : 1)}h all time` : '';
+      ? `${(snap.totals.seconds / 3600).toFixed(snap.totals.seconds >= 36_000 ? 0 : 1)}h total` : '';
     this.elTimerOf.textContent = `of ${clockText(snap.settings.sessionLen)}`;
+
+    this.elTrans.hidden = !snap.settings.showTranslation;
+    // The hints stop earning their place once the habit is underway.
+    this.elHints.hidden = snap.totals.verses >= 20;
 
     // The warning earns its place only once there is progress worth losing --
     // or immediately if this browser is not saving anything at all.
@@ -212,6 +219,20 @@ export class ReaderView {
   /** A hairline that fills as the current ayah earns its credit. */
   paintDwell(fraction: number, credited: boolean): void {
     this.elDwell.style.width = credited ? '0%' : `${Math.min(100, fraction * 100).toFixed(1)}%`;
+  }
+
+  /**
+   * A brief, quiet acknowledgement when the daily goal lands. Deliberately
+   * restrained -- this is a Qur'an reader, not a slot machine -- and it
+   * reduces to nothing under prefers-reduced-motion.
+   */
+  celebrateGoal(): void {
+    const goal = this.root.querySelector('.metric--goal');
+    if (!goal) return;
+    goal.classList.remove('is-celebrating');
+    void (goal as HTMLElement).offsetWidth; // restart the animation
+    goal.classList.add('is-celebrating');
+    setTimeout(() => goal.classList.remove('is-celebrating'), 2100);
   }
 
   flashVerseChange(): void {

@@ -44,6 +44,8 @@ let tv: TvView | null = null;
 let autoTimer: number | undefined;
 /** Set while the stats panel is open, so live updates reach it. */
 let statsHost: HTMLElement | null = null;
+/** Seeded at boot, so arriving with the goal already met does not celebrate. */
+let goalWasMet = false;
 
 /* --------------------------------------------------------------- appearance */
 
@@ -260,6 +262,11 @@ function paintState(): void {
   view.paintState(snap, store.degraded);
   tv?.paintState(snap);
   if (statsHost !== null) paintStats(statsHost);
+
+  // Only on the crossing, and only upward: dropping a rung can make goalMet
+  // true again, and re-celebrating that would be hollow.
+  if (snap.goalMet && !goalWasMet) view.celebrateGoal();
+  goalWasMet = snap.goalMet;
 }
 
 /** Renders the analytics into whichever host the stats panel handed us. */
@@ -286,15 +293,43 @@ function paintClock(): void {
 
 /* ----------------------------------------------------------------- keyboard */
 
+const ARABIC_SIZE_STEP = 6;
+
+function nudgeArabicSize(delta: number): void {
+  const current = store.get().settings.arabicSize;
+  const next = Math.min(200, Math.max(24, current + delta));
+  if (next === current) return;
+  store.dispatch({ t: 'patchSettings', patch: { arabicSize: next } });
+  paintVerse();
+}
+
+function toggleTranslation(): void {
+  const on = !store.get().settings.showTranslation;
+  store.dispatch({ t: 'patchSettings', patch: { showTranslation: on } });
+  paintVerse();
+}
+
 window.addEventListener('keydown', (e) => {
   if (isPanelOpen() || isDrawerOpen()) return;
   const target = e.target as HTMLElement | null;
   if (target && (target.tagName === 'INPUT' || target.isContentEditable)) return;
+  // Leave browser and OS chords alone; these are bare keys only.
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-  if (e.key === 'ArrowRight') { e.preventDefault(); void step(1); }
-  else if (e.key === 'ArrowLeft') { e.preventDefault(); void step(-1); }
-  else if (e.key === 'Escape' && tv !== null) { e.preventDefault(); void exitFullscreen(); }
-  else if (e.key === 'f' && tv === null) { e.preventDefault(); void enterFullscreen(); }
+  switch (e.key) {
+    case 'ArrowRight': e.preventDefault(); void step(1); break;
+    case 'ArrowLeft': e.preventDefault(); void step(-1); break;
+    case '[': e.preventDefault(); nudgeArabicSize(-ARABIC_SIZE_STEP); break;
+    case ']': e.preventDefault(); nudgeArabicSize(ARABIC_SIZE_STEP); break;
+    case 't': case 'T': e.preventDefault(); toggleTranslation(); break;
+    case 'f': case 'F':
+      if (tv === null) { e.preventDefault(); void enterFullscreen(); }
+      break;
+    case 'Escape':
+      if (tv !== null) { e.preventDefault(); void exitFullscreen(); }
+      break;
+    default: break;
+  }
 });
 
 /* --------------------------------------------------------------------- boot */
@@ -311,6 +346,7 @@ async function boot(): Promise<void> {
   view.noticeDismissed = store.get().noticeDismissed;
   sessionStartPoints = snap.pointsToday;
   sessionStartVerses = snap.versesToday;
+  goalWasMet = snap.goalMet;
 
   store.subscribe(() => paintState());
   paintState();

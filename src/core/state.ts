@@ -15,6 +15,7 @@ import { recomputeUnlockedMax, selectableRungs } from './unlock.ts';
 
 export const DEFAULT_SETTINGS: Settings = {
   arabicFont: 'amiri-quran',
+  showTranslation: false,
   arabicSize: 64,
   translationSize: 18,
   sessionLen: 70,

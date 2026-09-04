@@ -19,11 +19,24 @@ export interface PanelHandle { close(): void }
 
 let openPanel: PanelHandle | null = null;
 
+export interface ModalOptions {
+  /** Anchor the panel to a screen edge instead of centring it. */
+  side?: 'left' | 'right';
+}
+
 /** Opens a modal, closing whatever was open. Esc and scrim-click dismiss it. */
-export function openModal(build: (close: () => void) => HTMLElement): PanelHandle {
+export function openModal(
+  build: (close: () => void) => HTMLElement,
+  opts: ModalOptions = {},
+): PanelHandle {
   openPanel?.close();
 
-  const scrim = el('div', { class: 'scrim' });
+  const scrim = el('div', {
+    class: 'scrim',
+    style: opts.side
+      ? `padding:0;align-items:stretch;justify-content:flex-${opts.side === 'left' ? 'start' : 'end'}`
+      : '',
+  });
   const close = () => {
     scrim.remove();
     document.removeEventListener('keydown', onKey, true);
@@ -174,7 +187,9 @@ export function openSettings(
         ),
       );
 
-    return el('div', { class: 'panel panel--narrow', attrs: { role: 'dialog', 'aria-label': 'Settings' } },
+    return el('div', {
+      class: 'side side--left side--scroll', attrs: { role: 'dialog', 'aria-label': 'Settings' },
+    },
       el('h2', { class: 'panel__title', style: 'margin-bottom:20px', text: 'Reading settings' }),
 
       el('div', { class: 'panel__section', text: 'ARABIC FONT' }),
@@ -191,9 +206,22 @@ export function openSettings(
         el('div', { class: 'font-opt__name', text: f.label }),
       ))),
 
-      stepper('Arabic size', `${settings.arabicSize} px`,
+      stepper('Arabic size', `${settings.arabicSize} px · or press [ and ]`,
         () => set({ arabicSize: Math.max(24, settings.arabicSize - 6) }),
         () => set({ arabicSize: Math.min(200, settings.arabicSize + 6) })),
+      el('div', { class: 'row' },
+        el('div', {},
+          el('div', { class: 'row__label', text: 'Show translation' }),
+          el('div', { class: 'row__sub', text: 'Or press T while reading' })),
+        el('div', { class: 'tabs' },
+          el('button', {
+            text: 'OFF', attrs: { 'aria-selected': !settings.showTranslation },
+            on: { click: () => set({ showTranslation: false }) },
+          }),
+          el('button', {
+            text: 'ON', attrs: { 'aria-selected': settings.showTranslation },
+            on: { click: () => set({ showTranslation: true }) },
+          }))),
       stepper('Translation size', `${settings.translationSize} px · font is fixed`,
         () => set({ translationSize: Math.max(12, settings.translationSize - 1) }),
         () => set({ translationSize: Math.min(40, settings.translationSize + 1) })),
@@ -249,7 +277,7 @@ export function openSettings(
         el('button', { class: 'btn btn--primary', text: 'DONE', on: { click: close } }),
       ),
     );
-  });
+  }, { side: 'left' });
 }
 
 /* ------------------------------------------------------- local-data warning */

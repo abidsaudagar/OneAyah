@@ -35,6 +35,19 @@ Zero runtime dependencies. Measured gzipped, which is what GitHub Pages serves.
 Only the current surah is fetched; the service worker precaches the rest in the
 background. Al-Baqarah, the largest surah, is 17.7 KB brotli on its own.
 
+## Keyboard
+
+| | |
+|---|---|
+| `←` `→` | previous / next ayah |
+| `[` `]` | Arabic text size |
+| `T` | show or hide the translation |
+| `F` | fullscreen |
+| `Esc` | leave fullscreen |
+
+The translation is off by default. These hints sit under the ayah until you
+have twenty verses behind you, then they stop earning their place.
+
 ## How the scoring works
 
 | rung | pts/verse | goal bonus | a full-goal day |

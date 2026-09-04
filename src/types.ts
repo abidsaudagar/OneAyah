@@ -73,6 +73,8 @@ export type Accent = 'blue' | 'green' | 'purple' | 'black';
 
 export interface Settings {
   arabicFont: ArabicFont;
+  /** Off by default: the ayah alone is the point. Toggle with T. */
+  showTranslation: boolean;
   /** px */
   arabicSize: number;
   /** px. The translation's family is fixed; only size is adjustable. */
