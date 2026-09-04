@@ -2,10 +2,12 @@
  * The reverse timer and the time-read accounting.
  *
  * Both run on ActiveClocks gated by the same "visible AND not idle" boolean, so
- * a session cannot expire in a background tab: hidden means paused, paused
- * means the remaining time is frozen, and frozen time cannot reach zero. The
- * only expiry path is a visible frame, which is exactly where the completion
- * card wants to appear.
+ * a session cannot run down in a background tab: hidden means paused, paused
+ * means the remaining time is frozen, and frozen time cannot reach zero.
+ *
+ * Reaching 0:00 does not interrupt the reader. The caller rolls straight into
+ * another session; points are banked per verse as they are read, never at the
+ * end of a session, so nothing depends on the boundary.
  */
 import { ActiveClock, createActivityMonitor, createTicker, type ActivityMonitor, type Ticker } from '../platform/clock.ts';
 import type { SessionLen } from '../types.ts';
@@ -24,7 +26,7 @@ export class Session {
   readonly activity: ActivityMonitor;
   readonly ticker: Ticker;
 
-  /** Never reset; feeds TIME READ and the dwell timeline. */
+  /** Never reset; feeds TIME READ. */
   private readonly readClock = new ActiveClock();
   /** Reset at the start of every session. */
   private readonly sessionClock = new ActiveClock();
@@ -49,7 +51,7 @@ export class Session {
     this.ticker.add(() => this.frame());
   }
 
-  /** Active read time since the page loaded, in ms. The dwell timeline. */
+  /** Active read time since the page loaded, in ms. */
   activeMs(): number { return this.readClock.elapsedMs(); }
 
   remainingMs(): number { return Math.max(0, this.lengthMs - this.sessionClock.elapsedMs()); }

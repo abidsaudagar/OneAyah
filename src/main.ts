@@ -9,14 +9,13 @@ import './styles/app.css';
 import { createAppStore } from './app/store.ts';
 import { Session } from './app/session.ts';
 import type { Range } from './core/analytics.ts';
-import { evaluateDwell, requiredDwellMsForWords } from './core/dwell.ts';
-import { goalBonus, pointsPerVerse, scoreDay } from './core/scoring.ts';
+import { pointsPerVerse } from './core/scoring.ts';
 import { download, exportBlob, parseBackup, pickFile } from './store/backup.ts';
 import { globalIndex, loadMeta, loadSurah, prefetchSurah, type Surah } from './data/quran.ts';
 import { closeDrawer, isDrawerOpen, openDrawer } from './ui/drawer.ts';
 import { el, qs } from './ui/dom.ts';
 import {
-  closeAnyPanel, isPanelOpen, openAbout, openBackupPanel, openGoalPicker, openSessionComplete,
+  closeAnyPanel, isPanelOpen, openAbout, openBackupPanel, openGoalPicker,
   openSettings, openStatsPanel, openUpgradeGate,
 } from './ui/panels.ts';
 import { ReaderView } from './ui/reader.ts';
@@ -30,21 +29,7 @@ const app = qs<HTMLElement>('#app');
 let meta: QuranMeta;
 let surah: Surah;
 let index = 0;
-/**
- * The ticker starts with the Session, at module load -- well before the first
- * fetch resolves. Anything on the frame path that touches `meta` or `surah`
- * must wait for this.
- */
-let dataReady = false;
 let range: Range = 'year';
-
-/** Dwell bookkeeping for the ayah currently on screen. */
-let enteredAtMs = 0;
-let requiredMs = 0;
-
-/** Points banked at the moment the current session started. */
-let sessionStartPoints = 0;
-let sessionStartVerses = 0;
 
 let tv: TvView | null = null;
 let autoTimer: number | undefined;
@@ -66,38 +51,24 @@ function applyAppearance(s: Settings): void {
 
 const globalId = () => globalIndex(meta, surah.meta.n, index + 1);
 
-function armDwell(): void {
-  enteredAtMs = session.activeMs();
-  requiredMs = requiredDwellMsForWords(surah.words[index] ?? 0);
-}
-
 async function goToSurah(n: number, ayahIndex = 0): Promise<void> {
   surah = await loadSurah(n);
-  dataReady = true;
   index = Math.min(Math.max(0, ayahIndex), surah.meta.c - 1);
-  armDwell();
   paintVerse();
   store.dispatch({ t: 'setPosition', position: { surah: n, ayah: index + 1 } });
   prefetchSurah(n + 1);
 }
 
 /**
- * Moving forward is the only thing that credits a verse, and only when the
- * reader actually dwelled on it. Navigation is never blocked -- a fast move
- * still advances, it just earns nothing.
+ * Moving forward credits the verse you are leaving. Going back never credits,
+ * and a verse already banked today cannot be banked twice -- that dedupe lives
+ * in the reducer.
  */
 async function step(direction: 1 | -1): Promise<void> {
   session.start();
 
   if (direction === 1) {
-    const verdict = evaluateDwell({
-      enteredAtActiveMs: enteredAtMs,
-      leftAtActiveMs: session.activeMs(),
-      requiredMs,
-      alreadyCredited: store.get().credited.ids.includes(globalId()),
-      direction: 'forward',
-    });
-    if (verdict.credit) store.dispatch({ t: 'creditVerse', id: globalId(), nowMs: Date.now() });
+    store.dispatch({ t: 'creditVerse', id: globalId(), nowMs: Date.now() });
   }
 
   const next = index + direction;
@@ -110,7 +81,6 @@ async function step(direction: 1 | -1): Promise<void> {
     await goToSurah(surah.meta.n + 1, 0);
   } else {
     index = next;
-    armDwell();
     paintVerse();
     store.dispatch({ t: 'setPosition', position: { surah: surah.meta.n, ayah: index + 1 } });
     if (index >= surah.meta.c - 5) prefetchSurah(surah.meta.n + 1);
@@ -172,40 +142,12 @@ function openBackup(): void {
 const session = new Session({
   lengthSec: () => store.get().settings.sessionLen,
   onFlushSeconds: (seconds) => store.dispatch({ t: 'addSeconds', seconds, nowMs: Date.now() }),
-  onComplete: (readSeconds) => showSessionComplete(readSeconds),
+  // The countdown exists to pull the reader forward, not to stop them. At 0:00
+  // it rolls straight into another session rather than interrupting with a
+  // modal. Nothing is banked here -- points land per verse as they are read.
+  onComplete: () => session.restart(),
   onFrame: () => paintClock(),
 });
-
-function showSessionComplete(_readSeconds: number): void {
-  const snap = store.snapshot();
-  const verses = snap.versesToday - sessionStartVerses;
-  const earned = snap.pointsToday - sessionStartPoints;
-  const score = scoreDay({
-    verses: snap.versesToday, rung: snap.effectiveRung, streakDays: snap.streak.current,
-  });
-
-  openSessionComplete({
-    lengthSec: snap.settings.sessionLen,
-    verses,
-    rung: snap.effectiveRung,
-    goalMet: snap.goalMet,
-    bonus: score.goalMet ? goalBonus(snap.effectiveRung) : 0,
-    multiplier: snap.streak.multiplier,
-    earned,
-    streakDay: Math.max(1, snap.streak.current),
-    goalDelta: Math.max(0, snap.versesToday - snap.effectiveRung),
-  }, {
-    onAgain: () => startSession(),
-    onDone: () => { /* the reader stays where they are; nothing to do */ },
-  });
-}
-
-function startSession(): void {
-  const snap = store.snapshot();
-  sessionStartPoints = snap.pointsToday;
-  sessionStartVerses = snap.versesToday;
-  session.restart();
-}
 
 /* --------------------------------------------------------------- fullscreen */
 
@@ -236,16 +178,14 @@ async function exitFullscreen(): Promise<void> {
   if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch { /* ignore */ } }
 }
 
-/**
- * Holds each ayah for at least as long as it needs to earn credit, so TV mode
- * actually banks points rather than flicking past everything uncredited.
- */
+/** Holds each ayah for the chosen dwell, then moves on. */
 function scheduleAuto(): void {
   clearTimeout(autoTimer);
   const chosen = store.get().settings.autoAdvanceSec;
   if (tv === null || chosen === null) return;
-  const holdMs = Math.max(chosen * 1000, requiredDwellMsForWords(surah.words[index] ?? 0));
-  autoTimer = setTimeout(() => { void step(1).then(scheduleAuto); }, holdMs) as unknown as number;
+  autoTimer = setTimeout(
+    () => { void step(1).then(scheduleAuto); }, chosen * 1000,
+  ) as unknown as number;
 }
 
 // Browsers swallow Escape during native fullscreen, so the exit signal is the
@@ -291,14 +231,6 @@ function paintClock(): void {
   view.paintClock(remaining, lengthSec, session.activeMs() / 1000);
   tv?.paintClock(remaining);
 
-  // The clocks above must keep running while the text is still loading.
-  if (!dataReady) return;
-
-  const credited = store.get().credited.ids.includes(globalId());
-  view.paintDwell(
-    requiredMs === 0 ? 1 : (session.activeMs() - enteredAtMs) / requiredMs,
-    credited,
-  );
 }
 
 /* ----------------------------------------------------------------- keyboard */
@@ -354,8 +286,6 @@ async function boot(): Promise<void> {
 
   const snap = store.snapshot();
   view.noticeDismissed = store.get().noticeDismissed;
-  sessionStartPoints = snap.pointsToday;
-  sessionStartVerses = snap.versesToday;
   goalWasMet = snap.goalMet;
 
   store.subscribe(() => paintState());
@@ -364,7 +294,7 @@ async function boot(): Promise<void> {
   // The session clock starts on the first real interaction, not on load, so
   // opening the tab and walking away costs nothing.
   const startOnce = () => {
-    startSession();
+    session.restart();
     window.removeEventListener('keydown', startOnce);
     window.removeEventListener('pointerdown', startOnce);
   };
@@ -386,7 +316,6 @@ if (import.meta.env.DEV) {
       running: session.isRunning,
       activeMs: session.activeMs(),
       remainingMs: session.remainingMs(),
-      enteredAtMs, requiredMs,
       index, surah: surah?.meta.n,
       snapshot: store.snapshot(),
     }),

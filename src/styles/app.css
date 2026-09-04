@@ -196,10 +196,6 @@ button {
 }
 .hints span { display: inline-flex; align-items: center; }
 
-/* The dwell gate, shown only as a hairline under the ayah while it fills. */
-.dwell { height: 1px; margin: 0 26px; overflow: hidden; }
-.dwell__fill { height: 100%; width: 0; background: var(--accent); opacity: 0.35; }
-
 /* -------------------------------------------------------------------- banner */
 
 .banner {
@@ -481,7 +477,9 @@ button {
 @media (max-width: 767px) {
   .hdr { gap: 12px; padding: 14px 16px; }
   .hdr__tools, .hdr__menu { min-width: 0; }
-  .hdr__metrics { gap: 18px; justify-content: flex-start; }
+  /* Each metric still occupies a single line; it is the GROUP that wraps, so
+     a narrow phone shows goal above timer rather than clipping the timer. */
+  .hdr__metrics { gap: 6px 18px; justify-content: flex-start; flex-wrap: wrap; }
   .metric--time, .metric--streak, .metric--points { display: none; }
   .ayah { min-height: 220px; padding: 24px 20px; }
   .translation { padding: 16px 20px 8px; }

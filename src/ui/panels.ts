@@ -1,6 +1,6 @@
 /**
  * Modal panels: the goal picker, the upgrade gate, settings, the local-data
- * warning, and the session-complete card.
+ * warning, the analytics and the sources note.
  *
  * Panels re-render their whole subtree when opened. They are cheap, they are
  * correct, and no diffing is needed for something the reader sees for a few
@@ -320,80 +320,6 @@ export function openBackupPanel(
         class: 'btn btn--plain', style: 'height:40px',
         text: 'Keep it local, remind me later',
         on: { click: () => { actions.onDismiss(); close(); } },
-      }),
-    ),
-  ));
-}
-
-/* --------------------------------------------------------- session complete */
-
-export interface SessionSummary {
-  lengthSec: SessionLen;
-  verses: number;
-  rung: Rung;
-  goalMet: boolean;
-  bonus: number;
-  multiplier: number;
-  earned: number;
-  streakDay: number;
-  goalDelta: number;
-}
-
-export function openSessionComplete(
-  s: SessionSummary,
-  actions: { onAgain: () => void; onDone: () => void },
-): void {
-  const headline = s.verses === 0
-    ? 'No verses this time.'
-    : s.goalDelta > 0
-      ? `${s.verses} ${s.verses === 1 ? 'verse' : 'verses'}. Goal beaten by ${s.goalDelta}.`
-      : s.goalMet
-        ? `${s.verses} ${s.verses === 1 ? 'verse' : 'verses'}. Goal met.`
-        : `${s.verses} ${s.verses === 1 ? 'verse' : 'verses'}. ${s.rung - s.verses} to go.`;
-
-  const cell = (label: string, value: string, accent = false) => el('div', {
-    style: `flex:1;padding:15px 0;${accent ? 'background:var(--subtle);' : 'border-right:1px solid var(--border);'}`,
-  },
-    el('div', { style: 'color:var(--muted);font-size:9.5px;letter-spacing:.08em;margin-bottom:8px', text: label }),
-    el('div', { style: `font-size:17px${accent ? ';color:var(--accent)' : ''}`, text: value }),
-  );
-
-  openModal((close) => el('div', {
-    class: 'panel panel--wide', style: 'text-align:center', attrs: { role: 'dialog' },
-  },
-    el('div', {
-      class: 'mono',
-      style: 'font:500 11px/1 var(--font-mono);letter-spacing:.12em;color:var(--accent);margin-bottom:20px',
-      text: '00:00 — SESSION DONE',
-    }),
-    el('div', { style: 'max-width:420px;margin:0 auto 26px' },
-      el('div', { class: 'bar', style: 'height:10px;border-radius:5px;margin:0' },
-        el('div', { class: 'bar__fill', style: 'width:100%' })),
-      el('div', {
-        style: 'display:flex;justify-content:space-between;font:500 10px/1 var(--font-mono);letter-spacing:.08em;color:var(--muted);margin-top:9px',
-      },
-        el('span', { text: `${clockText(s.lengthSec)} SESSION` }),
-        el('span', { text: 'FULL' })),
-    ),
-    el('h2', { style: 'font:600 19px/1.35 var(--font-ui);margin:0 0 8px', text: headline }),
-    el('p', {
-      style: 'font:400 12.5px/1.6 var(--font-ui);color:var(--muted);margin:0 0 22px',
-      text: `Day ${s.streakDay}. ${s.goalMet ? 'Your streak holds.' : 'Reading even one more verse keeps the streak alive.'}`,
-    }),
-    el('div', {
-      class: 'mono',
-      style: 'display:flex;border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin-bottom:22px;font:500 11px/1 var(--font-mono)',
-    },
-      cell('VERSES', `${s.verses} × ${pointsPerVerse(s.rung)}`),
-      cell('GOAL BONUS', s.bonus > 0 ? `+${s.bonus}` : '—'),
-      cell('STREAK', `×${s.multiplier.toFixed(1)}`),
-      cell('EARNED', `+${num(s.earned)}`, true),
-    ),
-    btnRow(
-      el('button', { class: 'btn', text: 'DONE FOR TODAY', on: { click: () => { actions.onDone(); close(); } } }),
-      el('button', {
-        class: 'btn btn--primary', text: 'ONE MORE ROUND',
-        on: { click: () => { actions.onAgain(); close(); } },
       }),
     ),
   ));

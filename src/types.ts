@@ -45,20 +45,6 @@ export const SESSION_LABELS: Readonly<Record<SessionLen, string>> = {
   140: 'frying an egg',
 };
 
-/**
- * Anti-skim: a verse credits only after
- *   clamp(0.6s x wordCount, 2s, 30s)
- * of *active* dwell -- paused and idle time never counts toward it.
- *
- * The cap matters: 2:282 runs to ~128 words, which uncapped would demand 76.8s
- * of dwell -- longer than the 140s session's own budget allows for one verse,
- * and longer than the entire 70s session. Without a cap the longest ayah in the
- * Qur'an is literally uncreditable. 30s is the natural ceiling.
- */
-export const DWELL_FLOOR_MS = 2_000;
-export const DWELL_PER_WORD_MS = 600;
-export const DWELL_CAP_MS = 30_000;
-
 /** Countdown and time-read stop accruing after this long with no input. */
 export const IDLE_TIMEOUT_MS = 60_000;
 

@@ -17,9 +17,9 @@ export const sortedKeys = (days: DayMap): DayKey[] => Object.keys(days).sort();
  * Did the reader actually read on this day?
  *
  * A record can exist with `v: 0` -- time accrues from the moment the reader
- * opens the app, before any verse has cleared the dwell gate. Such a day is
- * NOT a read day: it breaks the streak and shows grey on the heatmap, which is
- * the honest reading of "the day passed empty".
+ * opens the app, before any verse has been credited. Such a day is NOT a read
+ * day: it breaks the streak and shows grey on the heatmap, which is the honest
+ * reading of "the day passed empty".
  */
 export const didRead = (days: DayMap, key: DayKey): boolean => (days[key]?.v ?? 0) >= 1;
 

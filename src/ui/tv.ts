@@ -6,9 +6,6 @@
  * unserved, since nobody can reach the arrow keys from a sofa. So auto-advance
  * is offered as an opt-in. The ayah still SITS STILL: this holds each verse for
  * a fixed dwell and then moves on. It is not scrolling text.
- *
- * Auto-advance holds for max(chosen dwell, required dwell), so verses credit
- * normally instead of the whole mode being decorative.
  */
 import type { Snapshot } from '../core/state.ts';
 import { clockText, el } from './dom.ts';

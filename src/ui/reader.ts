@@ -6,8 +6,6 @@
  * used. Nothing here diffs a tree sixty times a second.
  */
 import type { Snapshot } from '../core/state.ts';
-import { requiredDwellMsForWords } from '../core/dwell.ts';
-import { evaluateDwell } from '../core/dwell.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
 import { clockText, el, num, type Child } from './dom.ts';
 import type { Surah } from '../data/quran.ts';
@@ -53,7 +51,6 @@ export class ReaderView {
   private readonly elMult: HTMLElement;
   private readonly elPoints: HTMLElement;
   private readonly elPointsToday: HTMLElement;
-  private readonly elDwell: HTMLElement;
   private readonly elPrev: HTMLButtonElement;
   private readonly elNext: HTMLButtonElement;
   private readonly elBanner: HTMLElement;
@@ -120,7 +117,6 @@ export class ReaderView {
 
     this.elAyah = el('div', { class: 'ayah__text', attrs: { dir: 'rtl', lang: 'ar' } });
     this.elAyahBox = el('div', { class: 'ayah' }, this.elAyah);
-    this.elDwell = el('div', { class: 'dwell__fill' });
     this.elTrans = el('p', { class: 'translation__text' });
     this.elLocator = el('div', { class: 'locator' });
     this.elHints = el('div', { class: 'hints' },
@@ -142,7 +138,6 @@ export class ReaderView {
       header,
       el('main', { class: 'reader' },
         this.elAyahBox,
-        el('div', { class: 'dwell' }, this.elDwell),
         el('div', { class: 'translation' }, this.elTrans, this.elLocator),
         el('div', { class: 'nav' }, this.elPrev, this.elNext),
         this.elHints,
@@ -216,11 +211,6 @@ export class ReaderView {
     this.elRead.textContent = clockText(readSec);
   }
 
-  /** A hairline that fills as the current ayah earns its credit. */
-  paintDwell(fraction: number, credited: boolean): void {
-    this.elDwell.style.width = credited ? '0%' : `${Math.min(100, fraction * 100).toFixed(1)}%`;
-  }
-
   /**
    * A brief, quiet acknowledgement when the daily goal lands. Deliberately
    * restrained -- this is a Qur'an reader, not a slot machine -- and it
@@ -241,4 +231,4 @@ export class ReaderView {
   }
 }
 
-export { evaluateDwell, requiredDwellMsForWords, pointsPerVerse };
+export { pointsPerVerse };

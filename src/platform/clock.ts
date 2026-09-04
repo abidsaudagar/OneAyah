@@ -140,7 +140,7 @@ export type Unschedule = (handle: number) => void;
  *    next frame *after* the loop body, so the first subscriber to throw
  *    stopped the loop permanently -- and with it every timer in the app.
  * 2. ISOLATE each subscriber. One broken readout must not silently take down
- *    the countdown, the time-read accounting and the dwell gate with it.
+ *    the countdown and the time-read accounting with it.
  */
 export function createTicker(
   schedule: Schedule = (cb) => requestAnimationFrame(cb),

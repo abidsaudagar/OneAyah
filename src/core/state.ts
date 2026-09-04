@@ -108,8 +108,8 @@ export function reduce(state: PersistedState, a: Action, offset?: OffsetFn): Per
     case 'addSeconds': {
       if (a.seconds <= 0) return s;
       // A day record may exist with v = 0: time starts accruing the moment the
-      // reader opens the app, before anything has cleared the dwell gate. Such
-      // a day still counts as unread for streak and heatmap purposes.
+      // reader opens the app, before any verse has been credited. Such a day
+      // still counts as unread for streak and heatmap purposes.
       const day = s.days[today] ?? EMPTY_DAY(s.goal);
       const days = { ...s.days, [today]: { ...day, s: day.s + a.seconds } };
       return { ...s, days, totals: retotal(days) };

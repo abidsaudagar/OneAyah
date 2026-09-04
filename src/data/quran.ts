@@ -7,7 +7,6 @@
  * common way a Pages deploy breaks.
  */
 import type { QuranMeta, SurahMeta, SurahText } from '../types.ts';
-import { wordCount } from '../core/dwell.ts';
 
 export const dataUrl = (rel: string): string => `${import.meta.env.BASE_URL}data/${rel}`;
 
@@ -15,8 +14,6 @@ export interface Surah {
   meta: SurahMeta;
   ar: SurahText;
   en: SurahText;
-  /** Per-ayah word counts, for the dwell gate. Computed once on load. */
-  words: Int16Array;
 }
 
 let metaPromise: Promise<QuranMeta> | null = null;
@@ -51,10 +48,7 @@ export function loadSurah(n: number): Promise<Surah> {
       fetch(dataUrl(`en-itani/${n}.json`)).then((r) => r.json() as Promise<SurahText>),
     ]);
 
-    const words = new Int16Array(ar.length);
-    for (let i = 0; i < ar.length; i++) words[i] = wordCount(ar[i]!);
-
-    return { meta: info, ar, en, words };
+    return { meta: info, ar, en };
   })();
 
   cache.set(n, p);

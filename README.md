@@ -66,9 +66,12 @@ Reading one verse keeps a streak alive. Hitting the goal is what earns the
 bonus, grows the multiplier, and counts toward unlocking rungs 20 and 30. The
 day rolls over at 3am, so reading at 1am still counts for the night before.
 
-A verse credits only when you move forward off it having spent
-`clamp(0.6s x words, 2s, 30s)` of *active* time on it. Holding the arrow key
-down advances the text and earns nothing.
+A verse credits when you move forward off it. Going back never credits, and a
+verse already banked today cannot be banked twice.
+
+The reverse timer is there to pull you forward, not to stop you. At 0:00 it
+rolls straight into another session -- there is no modal, and nothing is
+banked at the boundary, because points land per verse as they are read.
 
 ## Sources and licences
 
