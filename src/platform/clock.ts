@@ -127,19 +127,43 @@ export interface Ticker {
   dispose(): void;
 }
 
-/** The one requestAnimationFrame loop. Everything animated subscribes here. */
-export function createTicker(): Ticker {
+/** Injectable so the loop can be unit-tested without a browser. */
+export type Schedule = (cb: (t: number) => void) => number;
+export type Unschedule = (handle: number) => void;
+
+/**
+ * The one requestAnimationFrame loop. Every clock in the app rides it.
+ *
+ * Two rules earn their keep here, both learned the hard way:
+ *
+ * 1. RE-ARM BEFORE running subscribers. The previous version scheduled the
+ *    next frame *after* the loop body, so the first subscriber to throw
+ *    stopped the loop permanently -- and with it every timer in the app.
+ * 2. ISOLATE each subscriber. One broken readout must not silently take down
+ *    the countdown, the time-read accounting and the dwell gate with it.
+ */
+export function createTicker(
+  schedule: Schedule = (cb) => requestAnimationFrame(cb),
+  unschedule: Unschedule = (h) => cancelAnimationFrame(h),
+): Ticker {
   const subs = new Set<(nowMs: number) => void>();
-  let raf = 0;
+  let handle = 0;
+  let alive = true;
 
   const loop = (t: number) => {
-    for (const fn of subs) fn(t);
-    raf = requestAnimationFrame(loop);
+    if (alive) handle = schedule(loop);
+    for (const fn of subs) {
+      try {
+        fn(t);
+      } catch (err) {
+        console.error('[qread] ticker subscriber threw; the clock keeps running', err);
+      }
+    }
   };
-  raf = requestAnimationFrame(loop);
+  handle = schedule(loop);
 
   return {
     add(fn) { subs.add(fn); return () => subs.delete(fn); },
-    dispose() { cancelAnimationFrame(raf); subs.clear(); },
+    dispose() { alive = false; unschedule(handle); subs.clear(); },
   };
 }

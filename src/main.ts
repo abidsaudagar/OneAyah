@@ -30,6 +30,12 @@ const app = qs<HTMLElement>('#app');
 let meta: QuranMeta;
 let surah: Surah;
 let index = 0;
+/**
+ * The ticker starts with the Session, at module load -- well before the first
+ * fetch resolves. Anything on the frame path that touches `meta` or `surah`
+ * must wait for this.
+ */
+let dataReady = false;
 let range: Range = 'year';
 
 /** Dwell bookkeeping for the ayah currently on screen. */
@@ -67,6 +73,7 @@ function armDwell(): void {
 
 async function goToSurah(n: number, ayahIndex = 0): Promise<void> {
   surah = await loadSurah(n);
+  dataReady = true;
   index = Math.min(Math.max(0, ayahIndex), surah.meta.c - 1);
   armDwell();
   paintVerse();
@@ -284,6 +291,9 @@ function paintClock(): void {
   view.paintClock(remaining, lengthSec, session.activeMs() / 1000);
   tv?.paintClock(remaining);
 
+  // The clocks above must keep running while the text is still loading.
+  if (!dataReady) return;
+
   const credited = store.get().credited.ids.includes(globalId());
   view.paintDwell(
     requiredMs === 0 ? 1 : (session.activeMs() - enteredAtMs) / requiredMs,
@@ -368,6 +378,9 @@ if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__qread = {
     store, session,
     step: (d: 1 | -1) => step(d),
+    // What one animation frame does. Exposed so the frame path can be driven
+    // in environments where requestAnimationFrame is throttled to zero.
+    paintClock: () => paintClock(),
     state: () => ({
       active: session.activity.active,
       running: session.isRunning,
