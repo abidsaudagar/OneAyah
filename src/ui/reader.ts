@@ -42,11 +42,12 @@ export class ReaderView {
   private readonly elTrans: HTMLElement;
   private readonly elLocator: HTMLElement;
   private elLocAyah!: HTMLElement;
-  private elLocInput!: HTMLInputElement;
   private elLocSurah!: HTMLButtonElement;
   private elLocTotal!: HTMLElement;
   /** Length of the surah on screen, so a typed ayah can be clamped to it. */
   private ayahCount = 1;
+  /** The ayah the locator is showing, restored when an edit is abandoned. */
+  private ayahShown = 1;
   private elHints!: HTMLElement;
   private readonly elGoalCount: HTMLElement;
   private readonly elGoalBar: HTMLElement;
@@ -171,28 +172,32 @@ export class ReaderView {
       on: { click: cb.onOpenDrawer },
     });
 
+    // The number is edited in place rather than swapped for an input: an input
+    // is a replaced box and cannot be made to sit on the same baseline as the
+    // text around it, so opening one nudged the whole line. This way the box
+    // never changes at all.
     this.elLocAyah = el('span', {
       class: 'locator__ayah',
       attrs: { title: 'Double-click to jump to an ayah' },
-      on: { dblclick: () => this.beginAyahEdit() },
-    });
-
-    this.elLocInput = el('input', {
-      class: 'locator__input',
-      attrs: {
-        type: 'text', inputmode: 'numeric', hidden: true,
-        'aria-label': 'Go to ayah', autocomplete: 'off',
-      },
       on: {
-        // The field is exactly as wide as what is in it, so the rest of the
-        // line does not shift as digits are typed.
-        input: () => this.sizeAyahInput(),
+        dblclick: () => this.beginAyahEdit(),
+        // Only digits, however they arrive -- typed, pasted or dropped. A mixed
+        // paste is stripped down rather than rejected whole, and three digits
+        // is the ceiling: no surah runs past 286 ayat.
+        input: () => {
+          const text = this.elLocAyah.textContent ?? '';
+          const digits = text.replace(/\D/g, '').slice(0, 3);
+          if (digits === text) return;
+          this.elLocAyah.textContent = digits;
+          this.selectAyahText(true);
+        },
         keydown: (e: KeyboardEvent) => {
+          if (!this.isEditingAyah()) return;
           if (e.key === 'Enter') { e.preventDefault(); this.commitAyahEdit(cb); }
           else if (e.key === 'Escape') { e.preventDefault(); this.endAyahEdit(); }
         },
-        // Clicking away abandons the edit; Enter is the only way to commit,
-        // so a half-typed number can never move the reader on its own.
+        // Clicking away abandons the edit; Enter is the only way to commit, so
+        // a half-typed number can never move the reader on its own.
         blur: () => this.endAyahEdit(),
       },
     });
@@ -200,29 +205,43 @@ export class ReaderView {
     this.elLocTotal = el('span', { class: 'locator__total' });
 
     return el('div', { class: 'locator' },
-      this.elLocSurah, ' · ', this.elLocAyah, this.elLocInput, this.elLocTotal);
+      this.elLocSurah, ' · ', this.elLocAyah, this.elLocTotal);
   }
 
-  private sizeAyahInput(): void {
-    this.elLocInput.style.width = `${Math.max(1, this.elLocInput.value.length)}ch`;
-  }
+  private isEditingAyah = (): boolean => this.elLocAyah.isContentEditable;
 
   private beginAyahEdit(): void {
-    this.elLocInput.value = this.elLocAyah.textContent ?? '';
-    this.sizeAyahInput();
-    this.elLocAyah.hidden = true;
-    this.elLocInput.hidden = false;
-    this.elLocInput.focus();
-    this.elLocInput.select();
+    // plaintext-only keeps pasted markup out. Browsers that do not know the
+    // value throw on it, so fall back to plain editing -- the input handler
+    // above still strips whatever lands here back down to digits.
+    try {
+      this.elLocAyah.contentEditable = 'plaintext-only';
+    } catch {
+      this.elLocAyah.contentEditable = 'true';
+    }
+    this.elLocAyah.focus();
+    this.selectAyahText(false);
+  }
+
+  /** Selects the number, or drops the caret at its end once `collapse` is set. */
+  private selectAyahText(collapse: boolean): void {
+    const range = document.createRange();
+    range.selectNodeContents(this.elLocAyah);
+    if (collapse) range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
   }
 
   private endAyahEdit(): void {
-    this.elLocInput.hidden = true;
-    this.elLocAyah.hidden = false;
+    if (!this.isEditingAyah()) return;
+    this.elLocAyah.contentEditable = 'false';
+    this.elLocAyah.textContent = String(this.ayahShown);
+    window.getSelection()?.removeAllRanges();
   }
 
   private commitAyahEdit(cb: ReaderCallbacks): void {
-    const typed = Number.parseInt(this.elLocInput.value.trim(), 10);
+    const typed = Number.parseInt(this.elLocAyah.textContent?.trim() ?? '', 10);
     this.endAyahEdit();
     if (!Number.isFinite(typed)) return;
     cb.onJumpToAyah(Math.min(Math.max(1, typed), this.ayahCount));
@@ -247,8 +266,9 @@ export class ReaderView {
     this.elTrans.style.fontSize = `${settings.translationSize}px`;
     this.elTrans.hidden = !settings.showTranslation;
     this.ayahCount = surah.meta.c;
+    this.ayahShown = index + 1;
     this.elLocSurah.textContent = surah.meta.tr;
-    this.elLocAyah.textContent = String(index + 1);
+    this.elLocAyah.textContent = String(this.ayahShown);
     this.elLocTotal.textContent = ` of ${surah.meta.c}`;
     // A jump lands here too, so an edit left hanging is closed by its result.
     this.endAyahEdit();

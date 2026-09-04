@@ -166,15 +166,13 @@ button {
 .locator__surah:hover { color: var(--ink); }
 .locator__ayah { cursor: text; }
 .locator__ayah:hover { color: var(--ink); }
-.locator__input {
-  font: inherit; color: var(--ink); background: none;
-  border: 0; padding: 0; margin: 0; text-align: center;
-  /* The width is set in ch from the digit count and the box is pinned to the
-     same 1em as the text it replaces, so opening the field shifts nothing --
-     not the rest of the line, and not the arrows under it. */
-  height: 1em; line-height: 1;
+/* While the number is being edited: darker, with a rule under it drawn as a
+   shadow rather than a border, so the line's height never changes. */
+.locator__ayah[contenteditable]:not([contenteditable='false']) {
+  color: var(--ink);
+  outline: none;
+  box-shadow: 0 2px 0 -1px var(--accent);
 }
-.locator__input:focus { outline: none; }
 
 .nav {
   display: flex; align-items: center; justify-content: center; gap: 22px;
