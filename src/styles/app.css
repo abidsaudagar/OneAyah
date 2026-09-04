@@ -132,14 +132,32 @@ button {
 
 /* Centred in whatever height is left, so the ayah sits in the middle of the
    frame instead of riding the top with a void underneath. */
-.reader { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.reader { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
 
+/* The ayah takes whatever height is left over and then KEEPS it, whatever the
+   verse. A box that grew with its content moved the text on every change --
+   the frame re-centred under the reader's eye -- and it is what a long ayah
+   used to overflow. Now the frame is fixed and an ayah too long for it is read
+   in parts, so nothing about the type or the layout moves between ayat.
+   Centred inside, so a short ayah still sits in the middle rather than riding
+   the top with a void underneath. */
 .ayah {
-  min-height: 300px;
+  /* A definite height, not a share of what is left over. `flex: 1` bounds
+     nothing once the page outgrows the window -- the chain above goes
+     content-driven, the box grows to whatever the ayah needs, and the split
+     measures against that and concludes the ayah fits, which is how a long
+     ayah escaped paging entirely. Worse, the leftover moves with the length of
+     the TRANSLATION, so the same ayah at the same size split five ways one
+     moment and six the next. A viewport unit cannot be argued with by its own
+     content: the frame is the same for every ayah, and a translation too long
+     to sit under it scrolls the page as it always did.
+     min-height wins on a window too short for 68vh, which is the point. */
+  flex: none; height: 68vh; min-height: 300px;
   display: flex; align-items: center; justify-content: center;
   padding: 32px 60px;
   /* overflow stays visible: Uthmani mark stacks sit well above the em box and
-     a clipped container shears the top off them. */
+     a clipped container shears the top off them. Paging is what keeps the text
+     inside the box; this is only about the marks that ride above it. */
   overflow: visible;
 }
 .ayah__text {
@@ -166,6 +184,10 @@ button {
   color: var(--muted);
   margin-top: 14px;
 }
+/* Only ever shown for an ayah that did not fit. It says the ayah is continuing,
+   which is the one thing the reader cannot otherwise tell: the ayah number does
+   not move when the arrow only turns a part. */
+.locator__part { color: var(--accent); }
 /* Both controls read as the same quiet line of text they replaced: the type,
    colour and spacing are inherited, and only hover admits they are clickable. */
 .locator__surah:hover { color: var(--ink); }
@@ -478,11 +500,20 @@ button {
    sit inside it, so showing the English shifts the pair, not the frame. Its
    own font-size is the one number both are measured from, which is what lets
    the fit pass in tv.ts scale them together. */
+/* Full height rather than max-height: the ayah is paged to fit this box, so it
+   is a frame to measure against, not something the content sizes. */
 .tv__stack {
-  width: 100%; max-height: 100%; overflow-y: auto;
-  display: flex; flex-direction: column; align-items: center; gap: 3vh;
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3vh;
   padding: 0 5vw;
 }
+/* Neither child may shrink. The stack has a fixed height, so a column flex
+   container would squeeze an over-tall child to fit -- and a squeezed child
+   reports the height it was squeezed TO, not the height its text needs, which
+   is the one number the split is measured on. Paging is what keeps the content
+   inside this box; flex must not silently do it first and lie about it. */
+.tv__ayah, .tv__translation { flex: 0 0 auto; }
 .tv__ayah {
   width: 100%; text-align: center;
   direction: rtl; line-height: 1.95;
@@ -492,6 +523,12 @@ button {
 .tv__translation {
   margin: 0; max-width: min(66ch, 78vw); text-align: center;
   color: var(--secondary); text-wrap: pretty;
+  /* The Arabic is paged to whatever the translation leaves, so an unbounded
+     translation can starve it -- 2:282's English is 635px of a 693px frame,
+     which left 33px for the ayah. The English keeps at most a third and
+     scrolls inside that. It is still ONE translation of the whole ayah, held
+     unbroken while the parts turn under it; only its viewport is capped. */
+  max-height: 34%; overflow-y: auto; overscroll-behavior: contain;
   font-family: var(--font-ui); font-weight: 400; line-height: 1.5;
   /* Just over a third of the Arabic, and never below the 18px the reader
      itself defaults to -- this is meant to be read from further away. */
@@ -504,6 +541,12 @@ button {
   font: 400 11px/1 var(--font-mono); color: var(--hairline);
 }
 .tv__auto { color: var(--accent); }
+.tv__part {
+  position: absolute; left: 0; right: 0; bottom: 58px;
+  text-align: center;
+  font: 400 11px/1 var(--font-mono); letter-spacing: 0.08em;
+  color: var(--accent);
+}
 /* Big invisible tap targets, so a propped-up tablet works without a keyboard. */
 .tv__tap { position: absolute; top: 0; bottom: 0; width: 30%; }
 .tv__tap--prev { right: 0; }

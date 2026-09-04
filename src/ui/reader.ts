@@ -10,6 +10,7 @@ import { resolveTheme } from '../platform/theme.ts';
 import type { Theme } from '../types.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
 import { clockText, el, num, tapOnly, type Child } from './dom.ts';
+import { Pager } from './pages.ts';
 import type { Surah } from '../data/quran.ts';
 
 export interface ReaderCallbacks {
@@ -75,6 +76,10 @@ export class ReaderView {
   private ayahCount = 1;
   /** The ayah the locator is showing, restored when an edit is abandoned. */
   private ayahShown = 1;
+  private elLocPart!: HTMLElement;
+  /** An ayah too long for the frame, split into the parts it is read in. */
+  private readonly pager = new Pager();
+  private pages: string[] = [''];
   private elHints!: HTMLElement;
   private readonly elGoalCount: HTMLElement;
   private readonly elGoalBar: HTMLElement;
@@ -236,9 +241,10 @@ export class ReaderView {
     });
 
     this.elLocTotal = el('span', { class: 'locator__total' });
+    this.elLocPart = el('span', { class: 'locator__part', attrs: { hidden: true } });
 
     return el('div', { class: 'locator' },
-      this.elLocSurah, ' · ', this.elLocAyah, this.elLocTotal);
+      this.elLocSurah, ' · ', this.elLocAyah, this.elLocTotal, this.elLocPart);
   }
 
   private isEditingAyah = (): boolean => this.elLocAyah.isContentEditable;
@@ -290,11 +296,23 @@ export class ReaderView {
     );
   }
 
-  /** Verse text and position. Called only when the ayah actually changes. */
-  paintVerse(surah: Surah, index: number, settings: Snapshot['settings']): void {
-    this.elAyah.textContent = surah.ar[index] ?? '';
+  /**
+   * Verse text and position. The face and the size are set BEFORE the split,
+   * because the split is measured against them -- pages found for the old type
+   * would be the wrong length for the new.
+   *
+   * The translation is not split. It is the whole ayah's meaning and it does
+   * not divide at the point the Arabic happens to run out of room, so it is
+   * painted whole and held there while the parts turn under it.
+   */
+  paintVerse(surah: Surah, index: number, page: number, settings: Snapshot['settings']): void {
     this.elAyah.dataset.font = settings.arabicFont;
     this.elAyah.style.fontSize = `${settings.arabicSize}px`;
+    this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', this.availableHeight());
+    const shown = Math.min(Math.max(0, page), this.pages.length - 1);
+    this.elAyah.textContent = this.pages[shown] ?? '';
+    this.elLocPart.textContent = ` · part ${shown + 1} of ${this.pages.length}`;
+    this.elLocPart.hidden = this.pages.length < 2;
     this.elTrans.textContent = surah.en[index] ?? '';
     this.elTrans.style.fontSize = `${settings.translationSize}px`;
     this.elTrans.hidden = !settings.showTranslation;
@@ -305,8 +323,27 @@ export class ReaderView {
     this.elLocTotal.textContent = ` of ${surah.meta.c}`;
     // A jump lands here too, so an edit left hanging is closed by its result.
     this.endAyahEdit();
-    this.elPrev.disabled = surah.meta.n === 1 && index === 0;
-    this.elNext.disabled = surah.meta.n === 114 && index === surah.meta.c - 1;
+    // Disabled only at the two ends of the Qur'an, and only on the part that
+    // would actually leave it: the first part of 1:1 back, the last part of
+    // 114:6 on. In between there is always somewhere to go.
+    this.elPrev.disabled = surah.meta.n === 1 && index === 0 && shown === 0;
+    this.elNext.disabled = surah.meta.n === 114 && index === surah.meta.c - 1
+      && shown === this.pages.length - 1;
+  }
+
+  /** How many parts the ayah on screen is being read in; 1 when it fits. */
+  pageCount(): number {
+    return this.pages.length;
+  }
+
+  /**
+   * The height a part has to fit, which is the frame minus its own padding.
+   * The frame is fixed by the layout, so this does not move with the verse.
+   */
+  private availableHeight(): number {
+    const cs = getComputedStyle(this.elAyahBox);
+    return this.elAyahBox.clientHeight
+      - Number.parseFloat(cs.paddingTop) - Number.parseFloat(cs.paddingBottom);
   }
 
   /** Everything derived from state. Cheap enough to call on every change. */

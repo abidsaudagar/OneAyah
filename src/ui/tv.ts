@@ -9,6 +9,7 @@
  */
 import type { Snapshot } from '../core/state.ts';
 import { clockText, el, tapOnly } from './dom.ts';
+import { Pager } from './pages.ts';
 import type { Surah } from '../data/quran.ts';
 
 export interface TvCallbacks {
@@ -26,6 +27,10 @@ export class TvView {
   private readonly elTrans: HTMLElement;
   private readonly elStack: HTMLElement;
   private readonly elAuto: HTMLElement;
+  private readonly elPart: HTMLElement;
+  /** An ayah too long for the frame, split into the parts it is read in. */
+  private readonly pager = new Pager();
+  private pages: string[] = [''];
 
   constructor(cb: TvCallbacks) {
     this.elClock = el('div', { class: 'tv__clock', text: '00:00' });
@@ -35,6 +40,7 @@ export class TvView {
     this.elTrans = el('p', { class: 'tv__translation' });
     this.elStack = el('div', { class: 'tv__stack' }, this.elAyah, this.elTrans);
     this.elAuto = el('span', { class: 'tv__auto' });
+    this.elPart = el('div', { class: 'tv__part', attrs: { hidden: true } });
 
     this.root = el('div', { class: 'tv', attrs: { role: 'dialog', 'aria-label': 'Fullscreen reader' } },
       this.elClock,
@@ -52,21 +58,48 @@ export class TvView {
         class: 'tv__tap tv__tap--next', attrs: { 'aria-label': 'Next ayah' },
         on: { click: cb.onNext, keydown: tapOnly },
       }),
+      this.elPart,
       el('div', { class: 'tv__foot' },
         this.elAuto,
         el('span', { text: '← → TO MOVE THROUGH THE AYAT · [ ] FOR TEXT SIZE · T FOR TRANSLATION · ESC TO EXIT' })),
     );
   }
 
-  paintVerse(surah: Surah, index: number, settings: Snapshot['settings']): void {
-    this.elAyah.textContent = surah.ar[index] ?? '';
+  /**
+   * The same three steps the reader takes, in the same order: the face and the
+   * size go on first, then the ayah is split for the box those produce, then
+   * the part is painted. The translation is whole and stays whole while the
+   * parts turn under it -- it is the meaning of the ayah, not of the screenful.
+   */
+  paintVerse(surah: Surah, index: number, page: number, settings: Snapshot['settings']): void {
     this.elAyah.dataset.font = settings.arabicFont;
+    this.sizeStack(settings);
+    // The translation is measured before the split, not after: it is painted
+    // first so the height it takes is already out of what the Arabic can use.
     this.elTrans.textContent = surah.en[index] ?? '';
     this.elTrans.hidden = !settings.showTranslation;
-    this.sizeStack(settings);
-    // A long ayah left scrolled down would otherwise hand its offset to the
-    // next one, which arrives at the top.
-    this.elStack.scrollTop = 0;
+    this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', this.availableHeight());
+    const shown = Math.min(Math.max(0, page), this.pages.length - 1);
+    this.elAyah.textContent = this.pages[shown] ?? '';
+    this.elPart.textContent = `PART ${shown + 1} OF ${this.pages.length}`;
+    this.elPart.hidden = this.pages.length < 2;
+  }
+
+  /** How many parts the ayah on screen is being read in; 1 when it fits. */
+  pageCount(): number {
+    return this.pages.length;
+  }
+
+  /**
+   * What the Arabic has to fit: the frame, less whatever the translation and
+   * the gap above it are already taking. Measured rather than assumed, because
+   * the translation wraps to a different number of lines per ayah -- it is the
+   * one thing in this box whose height the verse still moves.
+   */
+  private availableHeight(): number {
+    const gap = Number.parseFloat(getComputedStyle(this.elStack).rowGap) || 0;
+    const trans = this.elTrans.hidden ? 0 : this.elTrans.offsetHeight + gap;
+    return this.elStack.clientHeight - trans;
   }
 
   /**

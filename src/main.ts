@@ -30,6 +30,12 @@ const app = qs<HTMLElement>('#app');
 let meta: QuranMeta;
 let surah: Surah;
 let index = 0;
+/**
+ * Which part of the ayah is on screen. An ayah too long for the frame is read
+ * a screenful at a time, so the arrows turn parts first and only move to the
+ * next ayah once the last part has been read.
+ */
+let page = 0;
 let range: Range = 'year';
 
 /**
@@ -68,6 +74,7 @@ const scriptNow = (): ArabicScript => SCRIPT_OF[store.get().settings.arabicFont]
 async function goToSurah(n: number, ayahIndex = 0): Promise<void> {
   surah = await loadSurah(n, scriptNow());
   index = Math.min(Math.max(0, ayahIndex), surah.meta.c - 1);
+  page = 0;
   paintVerse();
   store.dispatch({ t: 'setPosition', position: { surah: n, ayah: index + 1 } });
   prefetchSurah(n + 1, scriptNow());
@@ -77,9 +84,22 @@ async function goToSurah(n: number, ayahIndex = 0): Promise<void> {
  * Moving forward credits the verse you are leaving. Going back never credits,
  * and a verse already banked today cannot be banked twice -- that dedupe lives
  * in the reducer.
+ *
+ * A long ayah is read in parts, and a part is not a verse. So the arrow turns
+ * the part first, and only the step off the LAST part leaves the ayah and
+ * credits it -- otherwise 2:282 alone would fill a five-verse goal. Going back
+ * off the first part lands on the last part of the ayah before, which is the
+ * screen the reader last saw.
  */
 async function step(direction: 1 | -1): Promise<void> {
   session.start();
+
+  const parts = activeView().pageCount();
+  if (direction === 1 ? page < parts - 1 : page > 0) {
+    page += direction;
+    paintVerse();
+    return;
+  }
 
   if (direction === 1) {
     store.dispatch({ t: 'creditVerse', id: globalId(), nowMs: Date.now() });
@@ -90,16 +110,34 @@ async function step(direction: 1 | -1): Promise<void> {
     if (surah.meta.n === 1) return;
     const prev = await loadSurah(surah.meta.n - 1, scriptNow());
     await goToSurah(prev.meta.n, prev.meta.c - 1);
+    landOnLastPart();
   } else if (next >= surah.meta.c) {
     if (surah.meta.n === 114) return;
     await goToSurah(surah.meta.n + 1, 0);
   } else {
     index = next;
+    page = 0;
     paintVerse();
+    if (direction === -1) landOnLastPart();
     store.dispatch({ t: 'setPosition', position: { surah: surah.meta.n, ayah: index + 1 } });
     if (index >= surah.meta.c - 5) prefetchSurah(surah.meta.n + 1, scriptNow());
   }
 }
+
+/**
+ * The view can only report how many parts an ayah has once it has laid one out,
+ * so arriving backwards takes a paint to find the count and a second to show
+ * the last part. Only ayat that actually split pay for it.
+ */
+function landOnLastPart(): void {
+  const last = activeView().pageCount() - 1;
+  if (last <= 0) return;
+  page = last;
+  paintVerse();
+}
+
+/** Whichever view the reader is actually looking at owns the split. */
+const activeView = (): { pageCount: () => number } => tv ?? view;
 
 /* -------------------------------------------------------------------- views */
 
@@ -184,8 +222,12 @@ async function enterFullscreen(): Promise<void> {
     onExit: () => void exitFullscreen(),
   });
   document.body.append(tv.root);
-  tv.paintVerse(surah, index, store.get().settings);
+  tv.paintVerse(surah, index, page, store.get().settings);
   tv.paintState(store.snapshot());
+  // The overlay's frame is not the reader's, so the ayah may split differently
+  // in it. Painting again with the clamped part keeps a reader who was on part
+  // 3 of 4 from landing past the end of a two-part split.
+  paintVerse(false);
   scheduleAuto();
 
   try {
@@ -201,6 +243,7 @@ async function exitFullscreen(): Promise<void> {
   autoTimer = undefined;
   tv?.root.remove();
   tv = null;
+  paintVerse(false);
   if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch { /* ignore */ } }
 }
 
@@ -215,6 +258,21 @@ function scheduleAuto(): void {
     void step(1).finally(scheduleAuto);
   }, chosen * 1000) as unknown as number;
 }
+
+// The Arabic faces load after the first paint, and a split measured against a
+// fallback face is measured against the wrong metrics -- the parts come out the
+// wrong length and nothing would ever recompute them. Re-split once the real
+// faces are in. Failure here is not worth handling: it means the fallback is
+// what the reader is going to see anyway, so the split already matches it.
+document.fonts?.ready.then(() => paintVerse(false)).catch(() => {});
+
+// A resize changes the frame the ayah was split for, so the split is stale.
+// Repainting re-measures it -- the pager keys its cache on the box it measured
+// against, so a size that has not actually changed costs nothing -- and
+// paintVerse clamps the part in case the new frame holds fewer of them.
+// `moved` is false: a window drag is not a step through the ayah and must not
+// re-arm the auto-advance dwell.
+window.addEventListener('resize', () => paintVerse(false));
 
 // Browsers swallow Escape during native fullscreen, so the exit signal is the
 // fullscreenchange event, never a key handler.
@@ -232,8 +290,13 @@ document.addEventListener('fullscreenchange', () => {
  */
 function paintVerse(moved = true): void {
   const settings = store.get().settings;
-  view.paintVerse(surah, index, settings);
-  tv?.paintVerse(surah, index, settings);
+  // Both views are painted, but they split independently: the overlay's frame
+  // and type are not the reader's, so the same ayah can be two parts in one and
+  // four in the other. `page` is then clamped to whichever is on screen, which
+  // is what keeps it in range across entering and leaving fullscreen.
+  view.paintVerse(surah, index, page, settings);
+  tv?.paintVerse(surah, index, page, settings);
+  page = Math.min(page, activeView().pageCount() - 1);
   shownKey = presentationKey(settings);
   shownFont = settings.arabicFont;
   if (tv && moved) scheduleAuto();
