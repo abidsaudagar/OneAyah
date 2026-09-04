@@ -164,6 +164,13 @@ export interface PersistedState {
   coverage: string;
   /** Whether the local-data warning has been dismissed. */
   noticeDismissed: boolean;
+  /**
+   * Whether the feedback ask has been answered or waved off. Set the moment
+   * the reader opens the panel OR dismisses the line, so the ask is made once
+   * and never again -- a reader who has already told me what they think should
+   * not be asked a second time for showing up a fourth day.
+   */
+  feedbackDismissed: boolean;
 }
 
 /* ---------- derived (never persisted) ---------- */

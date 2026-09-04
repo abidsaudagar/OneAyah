@@ -37,6 +37,7 @@ export function initialState(nowMs: number, offset?: OffsetFn): PersistedState {
     credited: { day, ids: [] },
     coverage: Coverage.empty().toBase64(),
     noticeDismissed: false,
+    feedbackDismissed: false,
   };
 }
 
@@ -49,6 +50,7 @@ export type Action =
   | { t: 'setPosition'; position: Position }
   | { t: 'patchSettings'; patch: Partial<Settings> }
   | { t: 'dismissNotice' }
+  | { t: 'dismissFeedback' }
   | { t: 'replaceState'; next: PersistedState };
 
 const EMPTY_DAY = (g: Rung): DayRecord => ({ v: 0, s: 0, g, p: 0 });
@@ -88,6 +90,9 @@ export function reduce(state: PersistedState, a: Action, offset?: OffsetFn): Per
   }
   if (a.t === 'dismissNotice') {
     return state.noticeDismissed ? state : { ...state, noticeDismissed: true };
+  }
+  if (a.t === 'dismissFeedback') {
+    return state.feedbackDismissed ? state : { ...state, feedbackDismissed: true };
   }
   if (a.t === 'setPosition') {
     const p = state.position;

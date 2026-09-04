@@ -19,7 +19,7 @@ describe('backup and repair', () => {
     assert.deepEqual(back, s);
   });
 
-  it('rejects anything that is not a qRead backup', () => {
+  it('rejects anything that is not a One Ayah backup', () => {
     assert.equal(repair(null, NOW), null);
     assert.equal(repair('a string', NOW), null);
     assert.equal(repair({ hello: 'world' }, NOW), null);

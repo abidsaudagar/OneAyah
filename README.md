@@ -1,4 +1,4 @@
-# qRead
+# One Ayah
 
 A Qur'an reading app built to make daily reading a habit. One ayah at a time,
 held still. A short reverse timer, a daily goal you can actually hit, and a
@@ -77,6 +77,23 @@ verse already banked today cannot be banked twice.
 The reverse timer is there to pull you forward, not to stop you. At 0:00 it
 rolls straight into another session -- there is no modal, and nothing is
 banked at the boundary, because points land per verse as they are read.
+
+## Feedback
+
+No analytics, no account, no third-party script. The app asks once: a line
+under the reader, after the third day the goal is met, that opens a single
+panel -- three questions worth answering, and the reader's own numbers shown in
+full with a button to copy them. It is also always reachable from the settings
+panel. Nothing is sent by the app itself; what reaches me is what someone
+chooses to paste.
+
+Set `FEEDBACK_FORM_URL` in `src/config.ts` to wherever answers should land.
+Empty is a supported state -- the panel drops the button and says there is no
+form yet. Nothing is ever appended to that URL, so no reading data rides in a
+query string.
+
+Every build stamps the commit it came from. It shows under `SOURCES` and leads
+the copied numbers, so a report names the code it came from.
 
 ## Sources and licences
 

@@ -13,6 +13,9 @@ import { clockText, el, num, tapOnly, type Child } from './dom.ts';
 import { Pager } from './pages.ts';
 import type { Surah } from '../data/quran.ts';
 
+/** What the line under the reader is currently asking for, if anything. */
+type BannerMode = 'degraded' | 'feedback' | 'notice';
+
 export interface ReaderCallbacks {
   onPrev: () => void;
   onNext: () => void;
@@ -24,7 +27,9 @@ export interface ReaderCallbacks {
   onOpenFullscreen: () => void;
   onOpenBackup: () => void;
   onOpenStats: () => void;
+  onOpenFeedback: () => void;
   onDismissNotice: () => void;
+  onDismissFeedback: () => void;
   /** Advance one step around light -> dark -> paper. */
   onCycleTheme: () => void;
 }
@@ -97,12 +102,16 @@ export class ReaderView {
   private readonly elPrev: HTMLButtonElement;
   private readonly elNext: HTMLButtonElement;
   private readonly elBanner: HTMLElement;
-  private elBannerText!: HTMLElement;
+  /** Rebuilt only when the ask changes, not on every paint. */
+  private bannerMode: BannerMode | null = null;
+  private readonly cb: ReaderCallbacks;
   private readonly elTheme: HTMLButtonElement;
   /** The face already painted, so the hot path skips a needless innerHTML write. */
   private themeFace = '';
 
   constructor(cb: ReaderCallbacks) {
+    this.cb = cb;
+
     /** Label, value and any trailing detail on a single line, optionally underlined by a bar. */
     const metric = (cls: string, label: string, parts: Child[], bar?: HTMLElement) =>
       el('div', { class: `metric ${cls}` },
@@ -195,8 +204,6 @@ export class ReaderView {
       ),
       this.elBanner,
     );
-
-    this.buildBanner(cb);
   }
 
   /**
@@ -299,13 +306,53 @@ export class ReaderView {
     cb.onJumpToAyah(Math.min(Math.max(1, typed), this.ayahCount));
   }
 
-  private buildBanner(cb: ReaderCallbacks): void {
-    this.elBannerText = el('span', {},
+  /**
+   * The one line under the reader, and the only place the app ever asks for
+   * anything. At most one ask is live at a time, in this order: a browser that
+   * is not saving at all, then the feedback ask, then the back-up notice.
+   *
+   * The feedback ask goes here rather than into a modal on purpose. A reader
+   * who has just hit their goal is in the middle of reading the Qur'an; a
+   * dialog over the ayah to ask them how the app is going would be the single
+   * most intrusive thing in it.
+   */
+  private paintBanner(mode: BannerMode | null): void {
+    if (mode === this.bannerMode) return;
+    this.bannerMode = mode;
+    this.elBanner.hidden = mode === null;
+    this.elBanner.classList.toggle('banner--warn', mode === 'degraded');
+    if (mode === null) return;
+
+    const dismiss = (onClick: () => void) =>
+      el('button', { class: 'banner__dismiss', text: 'DISMISS', on: { click: onClick } });
+
+    if (mode === 'degraded') {
+      this.elBanner.replaceChildren(el('span', {
+        text: 'This browser is not saving your progress — a private window, or storage is full. '
+          + 'Reading still works; export a backup to keep it.',
+      }));
+      return;
+    }
+
+    if (mode === 'feedback') {
+      this.elBanner.replaceChildren(
+        el('span', {},
+          'Three days on your goal. ',
+          el('button', {
+            class: 'link', text: 'Tell me how it is going',
+            on: { click: this.cb.onOpenFeedback },
+          }),
+          ' — it is one screen, and nothing is sent unless you send it.'),
+        dismiss(this.cb.onDismissFeedback),
+      );
+      return;
+    }
+
+    this.elBanner.replaceChildren(
+      el('span', {},
         'Saved in this browser only — clearing site data wipes it. ',
-        el('button', { class: 'link', text: 'Back up your progress', on: { click: cb.onOpenBackup } }));
-    this.elBanner.append(
-      this.elBannerText,
-      el('button', { class: 'banner__dismiss', text: 'DISMISS', on: { click: cb.onDismissNotice } }),
+        el('button', { class: 'link', text: 'Back up your progress', on: { click: this.cb.onOpenBackup } })),
+      dismiss(this.cb.onDismissNotice),
     );
   }
 
@@ -388,15 +435,12 @@ export class ReaderView {
 
     // The warning earns its place only once there is progress worth losing --
     // or immediately if this browser is not saving anything at all.
-    this.elBanner.classList.toggle('banner--warn', degraded);
-    if (degraded) {
-      this.elBannerText.textContent =
-        'This browser is not saving your progress — a private window, or storage is full. '
-        + 'Reading still works; export a backup to keep it.';
-      this.elBanner.hidden = false;
-    } else {
-      this.elBanner.hidden = this.noticeDismissed || snap.totals.verses < 5;
-    }
+    this.paintBanner(
+      degraded ? 'degraded'
+        : this.feedbackAsk ? 'feedback'
+        : this.noticeDismissed || snap.totals.verses < 5 ? null
+        : 'notice',
+    );
   }
 
   /** The theme button's glyph and its tooltip, both driven by the resolved surface. */
@@ -412,6 +456,8 @@ export class ReaderView {
   }
 
   noticeDismissed = false;
+  /** Whether the feedback ask is owed; decided in core, set before a paint. */
+  feedbackAsk = false;
 
   /** The session countdown and its bar; the only per-frame work. */
   paintClock(remainingSec: number, lengthSec: number, readSec: number): void {

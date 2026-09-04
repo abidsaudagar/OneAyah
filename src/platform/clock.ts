@@ -156,7 +156,7 @@ export function createTicker(
       try {
         fn(t);
       } catch (err) {
-        console.error('[qread] ticker subscriber threw; the clock keeps running', err);
+        console.error('[one-ayah] ticker subscriber threw; the clock keeps running', err);
       }
     }
   };

@@ -83,6 +83,9 @@ export function repair(raw: unknown, nowMs: number): PersistedState | null {
     },
     coverage: typeof r.coverage === 'string' ? r.coverage : base.coverage,
     noticeDismissed: r.noticeDismissed === true,
+    // Absent in backups written before the ask existed, which is exactly the
+    // reader who has never been asked -- so the default has to be false.
+    feedbackDismissed: r.feedbackDismissed === true,
   };
 }
 

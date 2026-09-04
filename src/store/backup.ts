@@ -10,7 +10,7 @@ import type { PersistedState } from '../types.ts';
 export function exportBlob(s: PersistedState, nowMs: number): { filename: string; json: string } {
   const d = new Date(nowMs);
   const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return { filename: `qread-backup-${stamp}.json`, json: JSON.stringify(s, null, 2) };
+  return { filename: `one-ayah-backup-${stamp}.json`, json: JSON.stringify(s, null, 2) };
 }
 
 export function download(filename: string, json: string): void {
@@ -34,7 +34,7 @@ export function parseBackup(text: string, nowMs: number): ImportResult {
     return { ok: false, error: 'That file is not valid JSON.' };
   }
   const state = repair(raw, nowMs);
-  if (!state) return { ok: false, error: 'That does not look like a qRead backup.' };
+  if (!state) return { ok: false, error: 'That does not look like a One Ayah backup.' };
   return { ok: true, state };
 }
 

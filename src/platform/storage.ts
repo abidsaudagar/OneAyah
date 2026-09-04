@@ -17,7 +17,7 @@ export interface Store {
 function rawLocalStorage(): globalThis.Storage | null {
   try {
     const ls = window.localStorage;
-    const probeKey = '__qread_probe__';
+    const probeKey = '__one_ayah_probe__';
     ls.setItem(probeKey, '1');
     ls.removeItem(probeKey);
     return ls;

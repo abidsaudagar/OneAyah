@@ -9,14 +9,16 @@ import './styles/app.css';
 import { createAppStore } from './app/store.ts';
 import { Session } from './app/session.ts';
 import type { Range } from './core/analytics.ts';
+import { report, shouldAsk } from './core/feedback.ts';
 import { pointsPerVerse } from './core/scoring.ts';
+import { BUILD, FEEDBACK_FORM_URL } from './config.ts';
 import { download, exportBlob, parseBackup, pickFile } from './store/backup.ts';
 import { globalIndex, loadMeta, loadSurah, prefetchSurah, type Surah } from './data/quran.ts';
 import { closeDrawer, isDrawerOpen, openDrawer } from './ui/drawer.ts';
 import { el, qs } from './ui/dom.ts';
 import {
-  closeAnyPanel, isPanelOpen, openAbout, openBackupPanel, openGoalPicker,
-  openSettings, openStatsPanel, openUpgradeGate,
+  closeAnyPanel, isPanelOpen, openAbout, openBackupPanel, openFeedbackPanel,
+  openGoalPicker, openSettings, openStatsPanel, openUpgradeGate,
 } from './ui/panels.ts';
 import { nextTheme } from './platform/theme.ts';
 import { ReaderView } from './ui/reader.ts';
@@ -155,17 +157,20 @@ const view = new ReaderView({
     { ...store.get().settings },
     (patch) => store.dispatch({ t: 'patchSettings', patch }),
     openAbout,
+    openFeedback,
   ),
   onOpenDrawer: () => openDrawer(meta, surah.meta.n, store.get().coverage,
     (n) => void goToSurah(n, 0)),
   onOpenFullscreen: () => void enterFullscreen(),
   onOpenBackup: () => openBackup(),
   onOpenStats: () => openStatsPanel(paintStats),
+  onOpenFeedback: () => openFeedback(),
   onDismissNotice: () => {
     view.noticeDismissed = true;
     store.dispatch({ t: 'dismissNotice' });
     paintState();
   },
+  onDismissFeedback: () => store.dispatch({ t: 'dismissFeedback' }),
   // The header button only ever names a surface, so cycling off `system`
   // pins the theme. The panel is where you hand the choice back to the OS.
   onCycleTheme: () => store.dispatch({
@@ -195,6 +200,22 @@ function openBackup(): void {
       paintState();
     },
   });
+}
+
+/**
+ * Opening the ask is itself an answer to it. Whether the reader writes anything
+ * or not, they have now been asked, so the line does not come back a second
+ * time -- and the numbers are gathered here, at the moment they are about to
+ * be looked at, rather than being kept anywhere.
+ */
+function openFeedback(): void {
+  const rows = report(store.get(), store.snapshot(), {
+    build: BUILD,
+    agent: navigator.userAgent,
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+  });
+  store.dispatch({ t: 'dismissFeedback' });
+  openFeedbackPanel(rows, FEEDBACK_FORM_URL);
 }
 
 /* ------------------------------------------------------------------ session */
@@ -351,6 +372,9 @@ function paintState(): void {
     else void showScript(script, shownFont);
   }
 
+  // The ask is a rule, not a stored flag: three goal-met days and not yet
+  // answered. It can only turn itself off, never back on.
+  view.feedbackAsk = shouldAsk(store.get().days, store.get().feedbackDismissed);
   view.paintState(snap, store.degraded);
   tv?.paintState(snap);
   if (statsHost !== null) paintStats(statsHost);
@@ -460,7 +484,7 @@ async function boot(): Promise<void> {
 if (import.meta.env.DEV) {
   // Dev-only handle for driving the app from the console or a test harness.
   // Stripped from production builds by the bundler's dead-code elimination.
-  (window as unknown as Record<string, unknown>).__qread = {
+  (window as unknown as Record<string, unknown>).__oneAyah = {
     store, session,
     step: (d: 1 | -1) => step(d),
     // What one animation frame does. Exposed so the frame path can be driven
@@ -481,7 +505,7 @@ boot().catch((err: unknown) => {
   app.replaceChildren(el('div', {
     style: 'padding:40px;max-width:520px;margin:0 auto;font:400 14px/1.6 var(--font-ui)',
   },
-    el('h1', { style: 'font-size:17px;margin:0 0 8px', text: 'qRead could not start' }),
+    el('h1', { style: 'font-size:17px;margin:0 0 8px', text: 'One Ayah could not start' }),
     el('p', { style: 'color:var(--muted);margin:0', text: String(err) }),
   ));
 });

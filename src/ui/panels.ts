@@ -1,13 +1,16 @@
 /**
  * Modal panels: the goal picker, the upgrade gate, settings, the local-data
- * warning, the analytics and the sources note.
+ * warning, the analytics, the feedback ask and the sources note.
  *
  * Panels re-render their whole subtree when opened. They are cheap, they are
  * correct, and no diffing is needed for something the reader sees for a few
  * seconds at a time.
  */
+import { reportText, type ReportRow } from '../core/feedback.ts';
 import { goalBonus, pointsPerVerse } from '../core/scoring.ts';
 import type { Snapshot } from '../core/state.ts';
+import { copyText, selectText } from '../platform/clipboard.ts';
+import { BUILD } from '../config.ts';
 import { unlockProgress } from '../core/unlock.ts';
 import {
   RUNGS, SCRIPT_OF, SESSION_LABELS, SESSION_LENGTHS, THEMES, UNLOCK_DAYS,
@@ -186,9 +189,10 @@ export function openSettings(
   settings: Settings,
   patch: (p: Partial<Settings>) => void,
   showAbout: () => void,
+  showFeedback: () => void,
 ): void {
   openModal((close) => {
-    const rerender = () => { close(); openSettings(settings, patch, showAbout); };
+    const rerender = () => { close(); openSettings(settings, patch, showAbout, showFeedback); };
     const set = (p: Partial<Settings>) => { Object.assign(settings, p); patch(p); rerender(); };
 
     const stepper = (label: string, sub: string, dec: () => void, inc: () => void) =>
@@ -295,6 +299,17 @@ export function openSettings(
         }))),
       ),
 
+      el('div', { class: 'panel__section', text: 'FEEDBACK' }),
+      el('div', { class: 'row', style: 'border-top:0;padding-top:0' },
+        el('div', {},
+          el('div', { class: 'row__label', text: 'Tell me what is wrong with it' }),
+          el('div', { class: 'row__sub', text: 'Nothing is sent unless you send it' })),
+        el('button', {
+          class: 'btn', style: 'flex:none;padding:0 16px',
+          text: 'FEEDBACK', on: { click: () => { close(); showFeedback(); } },
+        }),
+      ),
+
       btnRow(
         el('button', { class: 'btn', text: 'SOURCES', on: { click: () => { close(); showAbout(); } } }),
         el('button', { class: 'btn btn--primary', text: 'DONE', on: { click: close } }),
@@ -370,6 +385,76 @@ export function openStatsPanel(render: (host: HTMLElement) => void): void {
   });
 }
 
+/* ----------------------------------------------------------------- feedback */
+
+/**
+ * The feedback ask. There is no backend, so this panel cannot send anything --
+ * and does not pretend to. It asks three questions worth answering, points at
+ * wherever feedback is being taken, and offers the reader's own numbers as a
+ * block they can see in full and copy if they want to. Nothing is appended to
+ * the form URL: what travels is what the reader pastes.
+ */
+export function openFeedbackPanel(rows: readonly ReportRow[], formUrl: string): void {
+  openModal((close) => {
+    const box = el('div', { class: 'report' }, ...rows.map(([label, value]) =>
+      el('div', { class: 'report__row' },
+        el('span', { class: 'report__key', text: label }),
+        el('span', { class: 'report__val', text: value }))));
+
+    const copy = el('button', {
+      class: 'btn', text: 'COPY THESE NUMBERS',
+      on: {
+        click: () => {
+          void copyText(reportText(rows)).then((ok) => {
+            // A refused clipboard is not a dead end: select the block instead
+            // and let the reader press the key they already know.
+            if (!ok) selectText(box);
+            copy.textContent = ok ? 'COPIED' : 'SELECTED — COPY IT';
+            setTimeout(() => { copy.textContent = 'COPY THESE NUMBERS'; }, 2200);
+          });
+        },
+      },
+    });
+
+    return el('div', { class: 'panel', attrs: { role: 'dialog', 'aria-label': 'Feedback' } },
+      el('h2', { class: 'panel__title', text: 'Tell me how it is going' }),
+      el('p', {
+        class: 'panel__lede',
+        text: 'Three answers help more than anything else: what made you stop reading, '
+          + 'what surprised you, and whether you would miss this if it vanished tomorrow.',
+      }),
+
+      el('div', { class: 'panel__section', text: 'OPTIONAL — YOUR NUMBERS' }),
+      el('p', {
+        class: 'panel__lede',
+        style: 'margin-bottom:12px',
+        text: 'Everything below is already on your own screen somewhere. It is here so you '
+          + 'do not have to transcribe it, and it travels only if you paste it.',
+      }),
+      box,
+
+      formUrl
+        ? btnRow(
+          copy,
+          el('a', {
+            class: 'btn btn--primary', text: 'OPEN THE FORM',
+            attrs: { href: formUrl, target: '_blank', rel: 'noreferrer' },
+            on: { click: () => setTimeout(close, 0) },
+          }),
+        )
+        : btnRow(copy, el('button', { class: 'btn btn--primary', text: 'CLOSE', on: { click: close } })),
+
+      formUrl
+        ? null
+        : el('p', {
+          class: 'panel__note',
+          text: 'There is no feedback form wired up in this build yet. Send it however you '
+            + 'reached One Ayah in the first place, and paste the numbers in if they help.',
+        }),
+    );
+  });
+}
+
 /* -------------------------------------------------------------------- about */
 
 export function openAbout(): void {
@@ -405,6 +490,9 @@ export function openAbout(): void {
         ' · ',
         el('a', { attrs: { href: `${base}licenses/fonts.txt`, target: '_blank' }, text: 'fonts' })),
     ),
+    // The build is here so a report from a reader can name the code it came
+    // from -- there is no other way to tell two deploys apart from outside.
+    el('p', { class: 'panel__note', text: `One Ayah · build ${BUILD} · runs entirely in this browser` }),
     btnRow(el('button', { class: 'btn btn--primary', text: 'CLOSE', on: { click: close } })),
   ));
 }

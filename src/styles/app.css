@@ -361,6 +361,10 @@ button {
   border: 1px solid var(--border-strong); flex: 1;
 }
 .btn:hover { border-color: var(--ink); }
+/* A .btn that is a real link -- the one that leaves for the feedback form --
+   still has to look like the buttons beside it, underline and all. */
+a.btn { text-decoration: none; color: inherit; }
+a.btn--primary { color: var(--surface); }
 .btn--primary {
   background: var(--ink); color: var(--surface); border-color: var(--ink); flex: 1.6;
 }
@@ -369,6 +373,18 @@ button {
 .btn--plain:hover { color: var(--ink); }
 .btn[disabled] { opacity: 0.5; cursor: default; }
 .btn[disabled]:hover { border-color: var(--border-strong); background: var(--subtle); }
+
+/* The numbers offered with a piece of feedback. Shown in full rather than
+   summarised: a reader cannot consent to handing over what they cannot read. */
+.report {
+  border: 1px solid var(--border); border-radius: var(--r-lg);
+  background: var(--subtle); padding: 12px 15px;
+  font: 500 11px/1.9 var(--font-mono);
+  max-height: 264px; overflow-y: auto;
+}
+.report__row { display: flex; justify-content: space-between; gap: 16px; }
+.report__key { color: var(--muted); flex: none; }
+.report__val { text-align: right; overflow-wrap: anywhere; }
 
 .row {
   display: flex; align-items: center; justify-content: space-between;
