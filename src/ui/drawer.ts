@@ -88,7 +88,7 @@ export function openDrawer(
 
   const scrim = el('div', {
     class: 'scrim',
-    style: 'justify-content:flex-start;padding:0',
+    style: 'justify-content:flex-end;padding:0',
     on: { pointerdown: (e: PointerEvent) => { if (e.target === scrim) closeDrawer(); } },
   }, panel);
 
