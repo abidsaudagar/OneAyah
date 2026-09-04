@@ -52,7 +52,7 @@ describe('state reducer', () => {
 
   it('splits a session across the 3am rollover', () => {
     let s = initialState(at(2026, 9, 7, 23), utc);
-    s = readDay(s, at(2026, 9, 8, 2, 59) - 60_000, 3);          // still Monday
+    s = readDay(s, at(2026, 9, 8, 2) - 60_000, 3);              // 01:59 Tue -> Monday
     s = readDay(s, at(2026, 9, 8, 3) + 60_000, 2, 100);         // now Tuesday
 
     assert.equal(select(s, at(2026, 9, 8, 3) + 60_000, utc).versesToday, 2);
@@ -135,7 +135,15 @@ describe('state reducer', () => {
   it('accepts a wholesale state replacement, for backup import', () => {
     const a = readDay(initialState(at(2026, 9, 4), utc), at(2026, 9, 4), 4);
     const b = initialState(at(2026, 9, 4), utc);
-    assert.equal(reduce(b, { t: 'replaceState', next: a }, utc), a);
+    assert.deepEqual(reduce(b, { t: 'replaceState', next: a }, utc), a);
+  });
+
+  it('rebuilds totals on import rather than trusting them', () => {
+    const good = readDay(initialState(at(2026, 9, 4), utc), at(2026, 9, 4), 4);
+    const tampered = { ...good, totals: { points: 999_999, verses: 999, seconds: 999 } };
+    const out = reduce(initialState(at(2026, 9, 4), utc),
+      { t: 'replaceState', next: tampered }, utc);
+    assert.deepEqual(out.totals, good.totals);
   });
 
   it('clamps an out-of-range rung rather than trusting it', () => {

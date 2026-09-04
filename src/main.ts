@@ -1,0 +1,346 @@
+/**
+ * Composition root. Wiring only -- every rule lives in core/, every effect in
+ * platform/ or store/.
+ */
+import './styles/tokens.css';
+import './styles/fonts.css';
+import './styles/app.css';
+
+import { createAppStore } from './app/store.ts';
+import { Session } from './app/session.ts';
+import type { Range } from './core/analytics.ts';
+import { evaluateDwell, requiredDwellMsForWords } from './core/dwell.ts';
+import { goalBonus, pointsPerVerse, scoreDay } from './core/scoring.ts';
+import { download, exportBlob, parseBackup, pickFile } from './store/backup.ts';
+import { globalIndex, loadMeta, loadSurah, prefetchSurah, type Surah } from './data/quran.ts';
+import { closeDrawer, isDrawerOpen, openDrawer } from './ui/drawer.ts';
+import { el, qs } from './ui/dom.ts';
+import {
+  closeAnyPanel, isPanelOpen, openAbout, openBackupPanel, openGoalPicker, openSessionComplete,
+  openSettings, openUpgradeGate,
+} from './ui/panels.ts';
+import { ReaderView } from './ui/reader.ts';
+import { renderStats } from './ui/stats.ts';
+import { TvView } from './ui/tv.ts';
+import type { QuranMeta, Rung, Settings } from './types.ts';
+
+const store = createAppStore();
+const app = qs<HTMLElement>('#app');
+
+let meta: QuranMeta;
+let surah: Surah;
+let index = 0;
+let range: Range = 'year';
+
+/** Dwell bookkeeping for the ayah currently on screen. */
+let enteredAtMs = 0;
+let requiredMs = 0;
+
+/** Points banked at the moment the current session started. */
+let sessionStartPoints = 0;
+let sessionStartVerses = 0;
+
+let tv: TvView | null = null;
+let autoTimer: number | undefined;
+
+/* --------------------------------------------------------------- appearance */
+
+function applyAppearance(s: Settings): void {
+  const root = document.documentElement;
+  root.dataset.accent = s.accent;
+  if (s.theme === 'system') delete root.dataset.theme;
+  else root.dataset.theme = s.theme;
+}
+
+/* ------------------------------------------------------------------ reading */
+
+const globalId = () => globalIndex(meta, surah.meta.n, index + 1);
+
+function armDwell(): void {
+  enteredAtMs = session.activeMs();
+  requiredMs = requiredDwellMsForWords(surah.words[index] ?? 0);
+}
+
+async function goToSurah(n: number, ayahIndex = 0): Promise<void> {
+  surah = await loadSurah(n);
+  index = Math.min(Math.max(0, ayahIndex), surah.meta.c - 1);
+  armDwell();
+  paintVerse();
+  store.dispatch({ t: 'setPosition', position: { surah: n, ayah: index + 1 } });
+  prefetchSurah(n + 1);
+}
+
+/**
+ * Moving forward is the only thing that credits a verse, and only when the
+ * reader actually dwelled on it. Navigation is never blocked -- a fast move
+ * still advances, it just earns nothing.
+ */
+async function step(direction: 1 | -1): Promise<void> {
+  session.start();
+
+  if (direction === 1) {
+    const verdict = evaluateDwell({
+      enteredAtActiveMs: enteredAtMs,
+      leftAtActiveMs: session.activeMs(),
+      requiredMs,
+      alreadyCredited: store.get().credited.ids.includes(globalId()),
+      direction: 'forward',
+    });
+    if (verdict.credit) store.dispatch({ t: 'creditVerse', id: globalId(), nowMs: Date.now() });
+  }
+
+  const next = index + direction;
+  if (next < 0) {
+    if (surah.meta.n === 1) return;
+    const prev = await loadSurah(surah.meta.n - 1);
+    await goToSurah(prev.meta.n, prev.meta.c - 1);
+  } else if (next >= surah.meta.c) {
+    if (surah.meta.n === 114) return;
+    await goToSurah(surah.meta.n + 1, 0);
+  } else {
+    index = next;
+    armDwell();
+    paintVerse();
+    store.dispatch({ t: 'setPosition', position: { surah: surah.meta.n, ayah: index + 1 } });
+    if (index >= surah.meta.c - 5) prefetchSurah(surah.meta.n + 1);
+  }
+}
+
+/* -------------------------------------------------------------------- views */
+
+const view = new ReaderView({
+  onPrev: () => void step(-1),
+  onNext: () => void step(1),
+  onOpenGoal: () => {
+    const snap = store.snapshot();
+    openGoalPicker(snap, (r: Rung) => store.dispatch({ t: 'setRung', rung: r, nowMs: Date.now() }));
+  },
+  onOpenSettings: () => openSettings(
+    { ...store.get().settings },
+    (patch) => store.dispatch({ t: 'patchSettings', patch }),
+    openAbout,
+  ),
+  onOpenDrawer: () => openDrawer(meta, surah.meta.n, store.get().coverage,
+    (n) => void goToSurah(n, 0)),
+  onOpenFullscreen: () => void enterFullscreen(),
+  onOpenBackup: () => openBackup(),
+  onDismissNotice: () => {
+    view.noticeDismissed = true;
+    store.dispatch({ t: 'dismissNotice' });
+    paintState();
+  },
+});
+
+function openBackup(): void {
+  openBackupPanel(store.snapshot(), {
+    onExport: () => {
+      const { filename, json } = exportBlob(store.get(), Date.now());
+      download(filename, json);
+    },
+    onImport: async () => {
+      const text = await pickFile();
+      if (text === null) return;
+      const result = parseBackup(text, Date.now());
+      if (!result.ok) { alert(result.error); return; }
+      store.dispatch({ t: 'replaceState', next: result.state });
+      applyAppearance(result.state.settings);
+      await goToSurah(result.state.position.surah, result.state.position.ayah - 1);
+      paintState();
+    },
+    onDismiss: () => {
+      view.noticeDismissed = true;
+      store.dispatch({ t: 'dismissNotice' });
+      paintState();
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ session */
+
+const session = new Session({
+  lengthSec: () => store.get().settings.sessionLen,
+  onFlushSeconds: (seconds) => store.dispatch({ t: 'addSeconds', seconds, nowMs: Date.now() }),
+  onComplete: (readSeconds) => showSessionComplete(readSeconds),
+  onFrame: () => paintClock(),
+});
+
+function showSessionComplete(_readSeconds: number): void {
+  const snap = store.snapshot();
+  const verses = snap.versesToday - sessionStartVerses;
+  const earned = snap.pointsToday - sessionStartPoints;
+  const score = scoreDay({
+    verses: snap.versesToday, rung: snap.effectiveRung, streakDays: snap.streak.current,
+  });
+
+  openSessionComplete({
+    lengthSec: snap.settings.sessionLen,
+    verses,
+    rung: snap.effectiveRung,
+    goalMet: snap.goalMet,
+    bonus: score.goalMet ? goalBonus(snap.effectiveRung) : 0,
+    multiplier: snap.streak.multiplier,
+    earned,
+    streakDay: Math.max(1, snap.streak.current),
+    goalDelta: Math.max(0, snap.versesToday - snap.effectiveRung),
+  }, {
+    onAgain: () => startSession(),
+    onDone: () => { /* the reader stays where they are; nothing to do */ },
+  });
+}
+
+function startSession(): void {
+  const snap = store.snapshot();
+  sessionStartPoints = snap.pointsToday;
+  sessionStartVerses = snap.versesToday;
+  session.restart();
+}
+
+/* --------------------------------------------------------------- fullscreen */
+
+async function enterFullscreen(): Promise<void> {
+  tv = new TvView({
+    onPrev: () => void step(-1),
+    onNext: () => void step(1),
+    onExit: () => void exitFullscreen(),
+  });
+  document.body.append(tv.root);
+  tv.paintVerse(surah, index, store.get().settings);
+  tv.paintState(store.snapshot());
+  scheduleAuto();
+
+  try {
+    // Must be called synchronously enough to still count as a user gesture.
+    await document.documentElement.requestFullscreen();
+  } catch {
+    // Fullscreen refused (iOS Safari, permissions). The overlay still works.
+  }
+}
+
+async function exitFullscreen(): Promise<void> {
+  clearTimeout(autoTimer);
+  autoTimer = undefined;
+  tv?.root.remove();
+  tv = null;
+  if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch { /* ignore */ } }
+}
+
+/**
+ * Holds each ayah for at least as long as it needs to earn credit, so TV mode
+ * actually banks points rather than flicking past everything uncredited.
+ */
+function scheduleAuto(): void {
+  clearTimeout(autoTimer);
+  const chosen = store.get().settings.autoAdvanceSec;
+  if (tv === null || chosen === null) return;
+  const holdMs = Math.max(chosen * 1000, requiredDwellMsForWords(surah.words[index] ?? 0));
+  autoTimer = setTimeout(() => { void step(1).then(scheduleAuto); }, holdMs) as unknown as number;
+}
+
+// Browsers swallow Escape during native fullscreen, so the exit signal is the
+// fullscreenchange event, never a key handler.
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && tv !== null) void exitFullscreen();
+});
+
+/* ---------------------------------------------------------------- rendering */
+
+function paintVerse(): void {
+  const settings = store.get().settings;
+  view.paintVerse(surah, index, settings);
+  tv?.paintVerse(surah, index, settings);
+  if (tv) scheduleAuto();
+}
+
+function paintState(): void {
+  const snap = store.snapshot();
+  applyAppearance(snap.settings);
+  view.paintState(snap, store.degraded);
+  tv?.paintState(snap);
+  renderStats(view.statsHost, store.get().days, snap.today, range, (r) => { range = r; paintState(); });
+}
+
+function paintClock(): void {
+  const lengthSec = store.get().settings.sessionLen;
+  const remaining = session.isRunning || session.elapsedMs() > 0
+    ? session.remainingMs() / 1000
+    : lengthSec;
+  view.paintClock(remaining, lengthSec, session.activeMs() / 1000);
+  tv?.paintClock(remaining);
+
+  const credited = store.get().credited.ids.includes(globalId());
+  view.paintDwell(
+    requiredMs === 0 ? 1 : (session.activeMs() - enteredAtMs) / requiredMs,
+    credited,
+  );
+}
+
+/* ----------------------------------------------------------------- keyboard */
+
+window.addEventListener('keydown', (e) => {
+  if (isPanelOpen() || isDrawerOpen()) return;
+  const target = e.target as HTMLElement | null;
+  if (target && (target.tagName === 'INPUT' || target.isContentEditable)) return;
+
+  if (e.key === 'ArrowRight') { e.preventDefault(); void step(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); void step(-1); }
+  else if (e.key === 'Escape' && tv !== null) { e.preventDefault(); void exitFullscreen(); }
+  else if (e.key === 'f' && tv === null) { e.preventDefault(); void enterFullscreen(); }
+});
+
+/* --------------------------------------------------------------------- boot */
+
+async function boot(): Promise<void> {
+  applyAppearance(store.get().settings);
+  app.append(view.root);
+
+  meta = await loadMeta();
+  const pos = store.get().position;
+  await goToSurah(pos.surah, pos.ayah - 1);
+
+  const snap = store.snapshot();
+  view.noticeDismissed = store.get().noticeDismissed;
+  sessionStartPoints = snap.pointsToday;
+  sessionStartVerses = snap.versesToday;
+
+  store.subscribe(() => paintState());
+  paintState();
+
+  // The session clock starts on the first real interaction, not on load, so
+  // opening the tab and walking away costs nothing.
+  const startOnce = () => {
+    startSession();
+    window.removeEventListener('keydown', startOnce);
+    window.removeEventListener('pointerdown', startOnce);
+  };
+  window.addEventListener('keydown', startOnce);
+  window.addEventListener('pointerdown', startOnce);
+}
+
+if (import.meta.env.DEV) {
+  // Dev-only handle for driving the app from the console or a test harness.
+  // Stripped from production builds by the bundler's dead-code elimination.
+  (window as unknown as Record<string, unknown>).__qread = {
+    store, session,
+    step: (d: 1 | -1) => step(d),
+    state: () => ({
+      active: session.activity.active,
+      running: session.isRunning,
+      activeMs: session.activeMs(),
+      remainingMs: session.remainingMs(),
+      enteredAtMs, requiredMs,
+      index, surah: surah?.meta.n,
+      snapshot: store.snapshot(),
+    }),
+  };
+}
+
+boot().catch((err: unknown) => {
+  app.replaceChildren(el('div', {
+    style: 'padding:40px;max-width:520px;margin:0 auto;font:400 14px/1.6 var(--font-ui)',
+  },
+    el('h1', { style: 'font-size:17px;margin:0 0 8px', text: 'qRead could not start' }),
+    el('p', { style: 'color:var(--muted);margin:0', text: String(err) }),
+  ));
+});
+
+export { closeAnyPanel, closeDrawer, openUpgradeGate, pointsPerVerse };

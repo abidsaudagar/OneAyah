@@ -79,7 +79,12 @@ function ensureDay(s: PersistedState, nowMs: number, offset?: OffsetFn): Persist
 }
 
 export function reduce(state: PersistedState, a: Action, offset?: OffsetFn): PersistedState {
-  if (a.t === 'replaceState') return a.next;
+  if (a.t === 'replaceState') {
+    // Totals are always rebuilt from the day records, never taken on trust.
+    // An imported backup with hand-edited totals cannot inject points the
+    // days do not support, and no caller has to remember to recompute.
+    return { ...a.next, totals: retotal(a.next.days) };
+  }
   if (a.t === 'dismissNotice') {
     return state.noticeDismissed ? state : { ...state, noticeDismissed: true };
   }
