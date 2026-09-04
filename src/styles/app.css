@@ -191,6 +191,11 @@ button {
 /* Both controls read as the same quiet line of text they replaced: the type,
    colour and spacing are inherited, and only hover admits they are clickable. */
 .locator__surah:hover { color: var(--ink); }
+/* The Arabic name is set in the same face the drawer names surahs in, and a
+   little larger: 11px mono is a size for Latin letters and numbers, and Arabic
+   at it is unreadable. The line-height stays the locator's, so the taller
+   glyphs do not push the line open. */
+.locator__ar { font-family: var(--font-amiri); font-size: 17px; }
 .locator__ayah { cursor: text; }
 .locator__ayah:hover { color: var(--ink); }
 /* While the number is being edited: darker, with a rule under it drawn as a
@@ -496,6 +501,17 @@ button {
 .tv__goal { position: absolute; top: 26px; right: 32px; display: flex; align-items: center; gap: 12px; }
 .tv__goal .bar { width: 120px; height: 8px; margin: 0; border-radius: 4px; }
 .tv__count { font: 500 11px/1 var(--font-mono); color: var(--muted); }
+/* Where in the Qur'an this is, held on its own line below the clock row: on a
+   phone the clock and the goal bar leave no room between them for it. Quiet,
+   in the chrome's mono, so it names the surah without competing with it. */
+.tv__surah {
+  position: absolute; top: 58px; left: 0; right: 0;
+  display: flex; align-items: baseline; justify-content: center; gap: 8px;
+  font: 400 11px/1 var(--font-mono); letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.tv__surah-tr { text-transform: uppercase; }
+.tv__surah-ar { font-family: var(--font-amiri); font-size: 19px; letter-spacing: 0; }
 /* The stack owns the padding and the centring; the ayah and its translation
    sit inside it, so showing the English shifts the pair, not the frame. Its
    own font-size is the one number both are measured from, which is what lets

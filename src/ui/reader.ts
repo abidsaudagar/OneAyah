@@ -71,6 +71,8 @@ export class ReaderView {
   private readonly elLocator: HTMLElement;
   private elLocAyah!: HTMLElement;
   private elLocSurah!: HTMLButtonElement;
+  private elLocSurahTr!: HTMLElement;
+  private elLocSurahAr!: HTMLElement;
   private elLocTotal!: HTMLElement;
   /** Length of the surah on screen, so a typed ayah can be clamped to it. */
   private ayahCount = 1;
@@ -202,13 +204,24 @@ export class ReaderView {
    * type, but the surah name is a button onto the surah drawer, and the ayah
    * number opens a jump field on double-click -- deliberately double, so a
    * stray click while reading never turns the line into an input.
+   *
+   * The surah is named twice, transliteration then Arabic, the same pairing and
+   * the same order the drawer lists it in. The Arabic is a separate span rather
+   * than more text in the button: `dir` isolates it, so the neutral " · " on
+   * either side stays put instead of being pulled into the Arabic's run and
+   * reordered -- the whole line would otherwise rearrange around the name.
    */
   private buildLocator(cb: ReaderCallbacks): HTMLElement {
+    this.elLocSurahTr = el('span', { class: 'locator__tr' });
+    this.elLocSurahAr = el('span', {
+      class: 'locator__ar',
+      attrs: { dir: 'rtl', lang: 'ar' },
+    });
     this.elLocSurah = el('button', {
       class: 'locator__surah',
       attrs: { type: 'button', title: 'Browse surahs' },
       on: { click: cb.onOpenDrawer },
-    });
+    }, this.elLocSurahTr, ' · ', this.elLocSurahAr);
 
     // The number is edited in place rather than swapped for an input: an input
     // is a replaced box and cannot be made to sit on the same baseline as the
@@ -318,7 +331,8 @@ export class ReaderView {
     this.elTrans.hidden = !settings.showTranslation;
     this.ayahCount = surah.meta.c;
     this.ayahShown = index + 1;
-    this.elLocSurah.textContent = surah.meta.tr;
+    this.elLocSurahTr.textContent = surah.meta.tr;
+    this.elLocSurahAr.textContent = surah.meta.ar;
     this.elLocAyah.textContent = String(this.ayahShown);
     this.elLocTotal.textContent = ` of ${surah.meta.c}`;
     // A jump lands here too, so an edit left hanging is closed by its result.

@@ -23,6 +23,8 @@ export class TvView {
   private readonly elClock: HTMLElement;
   private readonly elBar: HTMLElement;
   private readonly elCount: HTMLElement;
+  private readonly elSurahTr: HTMLElement;
+  private readonly elSurahAr: HTMLElement;
   private readonly elAyah: HTMLElement;
   private readonly elTrans: HTMLElement;
   private readonly elStack: HTMLElement;
@@ -36,6 +38,11 @@ export class TvView {
     this.elClock = el('div', { class: 'tv__clock', text: '00:00' });
     this.elBar = el('div', { class: 'bar__fill' });
     this.elCount = el('div', { class: 'tv__count', text: '0/5' });
+    // Named twice, transliteration then Arabic, the same pairing the reader's
+    // locator and the drawer use. The Arabic is its own span so `dir` isolates
+    // it and the separator between the two names cannot be reordered into it.
+    this.elSurahTr = el('span', { class: 'tv__surah-tr' });
+    this.elSurahAr = el('span', { class: 'tv__surah-ar', attrs: { dir: 'rtl', lang: 'ar' } });
     this.elAyah = el('div', { class: 'tv__ayah', attrs: { dir: 'rtl', lang: 'ar' } });
     this.elTrans = el('p', { class: 'tv__translation' });
     this.elStack = el('div', { class: 'tv__stack' }, this.elAyah, this.elTrans);
@@ -45,6 +52,10 @@ export class TvView {
     this.root = el('div', { class: 'tv', attrs: { role: 'dialog', 'aria-label': 'Fullscreen reader' } },
       this.elClock,
       el('div', { class: 'tv__goal' }, el('div', { class: 'bar' }, this.elBar), this.elCount),
+      // Outside the stack, and absolutely placed: the stack's height is the
+      // frame the ayah is paged against, so anything added INSIDE it would
+      // quietly shorten the box the split measures.
+      el('div', { class: 'tv__surah' }, this.elSurahTr, ' · ', this.elSurahAr),
       // Ayah and translation ride in one stack, so the pair stays centred in
       // the frame instead of the Arabic jumping when T brings the English in.
       this.elStack,
@@ -73,6 +84,8 @@ export class TvView {
    */
   paintVerse(surah: Surah, index: number, page: number, settings: Snapshot['settings']): void {
     this.elAyah.dataset.font = settings.arabicFont;
+    this.elSurahTr.textContent = surah.meta.tr;
+    this.elSurahAr.textContent = surah.meta.ar;
     this.sizeStack(settings);
     // The translation is measured before the split, not after: it is painted
     // first so the height it takes is already out of what the Arabic can use.
