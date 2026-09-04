@@ -6,6 +6,8 @@
  * used. Nothing here diffs a tree sixty times a second.
  */
 import type { Snapshot } from '../core/state.ts';
+import { resolveTheme } from '../platform/theme.ts';
+import type { Theme } from '../types.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
 import { clockText, el, num, tapOnly, type Child } from './dom.ts';
 import type { Surah } from '../data/quran.ts';
@@ -22,7 +24,32 @@ export interface ReaderCallbacks {
   onOpenBackup: () => void;
   onOpenStats: () => void;
   onDismissNotice: () => void;
+  /** Advance one step around light -> dark -> paper. */
+  onCycleTheme: () => void;
 }
+
+/**
+ * The header button's face: the surface you are ON, plus the one a click moves
+ * you to. `system` never appears here -- the button resolves it to whichever
+ * surface is actually on screen and steps on from there, so a click always
+ * visibly changes something.
+ */
+const THEME_FACE: Record<'light' | 'dark' | 'paper', { paths: string; label: string; next: string }> = {
+  light: {
+    paths: '<circle cx="9" cy="9" r="3.2"/><path d="M9 1.6v2.2M9 14.2v2.2M1.6 9h2.2M14.2 9h2.2'
+      + 'M3.7 3.7l1.6 1.6M12.7 12.7l1.6 1.6M14.3 3.7l-1.6 1.6M5.3 12.7l-1.6 1.6"/>',
+    label: 'Light', next: 'Dark',
+  },
+  dark: {
+    paths: '<path d="M14.6 10.7A6.2 6.2 0 0 1 7.3 3.4 6.2 6.2 0 1 0 14.6 10.7z"/>',
+    label: 'Dark', next: 'Paper',
+  },
+  paper: {
+    paths: '<path d="M4 2.5h5.8L14 6.7v8.8H4z"/><path d="M9.8 2.5v4.2H14"/>'
+      + '<path d="M6.4 9.6h5.2M6.4 12.2h5.2"/>',
+    label: 'Paper', next: 'Light',
+  },
+};
 
 /** Icons are inline SVG: three icons is not worth a sprite sheet or a library. */
 const icon = (paths: string, label: string, onClick: () => void) => el('button', {
@@ -64,6 +91,9 @@ export class ReaderView {
   private readonly elNext: HTMLButtonElement;
   private readonly elBanner: HTMLElement;
   private elBannerText!: HTMLElement;
+  private readonly elTheme: HTMLButtonElement;
+  /** The face already painted, so the hot path skips a needless innerHTML write. */
+  private themeFace = '';
 
   constructor(cb: ReaderCallbacks) {
     /** Label, value and any trailing detail on a single line, optionally underlined by a bar. */
@@ -97,6 +127,8 @@ export class ReaderView {
       el('span', { class: 'metric__chip', text: 'GOAL MET' }),
     );
 
+    this.elTheme = icon('', 'Theme', cb.onCycleTheme);
+
     const header = el('header', { class: 'hdr' },
       el('div', { class: 'hdr__tools' },
         // A slider pair, matching the design canvas's own settings glyph --
@@ -121,6 +153,7 @@ export class ReaderView {
         metric('metric--points', 'POINTS', [this.elPoints, this.elPointsToday]),
       ),
       el('div', { class: 'hdr__menu' },
+        this.elTheme,
         icon('<path d="M2 4.5h14M2 9h14M2 13.5h14"/>', 'Surahs', cb.onOpenDrawer)),
     );
 
@@ -290,6 +323,8 @@ export class ReaderView {
       ? `${(snap.totals.seconds / 3600).toFixed(snap.totals.seconds >= 36_000 ? 0 : 1)}h total` : '';
     this.elTimerOf.textContent = `of ${clockText(snap.settings.sessionLen)}`;
 
+    this.paintTheme(snap.settings.theme);
+
     this.elTrans.hidden = !snap.settings.showTranslation;
     // The hints stop earning their place once the habit is underway.
     this.elHints.hidden = snap.totals.verses >= 20;
@@ -305,6 +340,18 @@ export class ReaderView {
     } else {
       this.elBanner.hidden = this.noticeDismissed || snap.totals.verses < 5;
     }
+  }
+
+  /** The theme button's glyph and its tooltip, both driven by the resolved surface. */
+  private paintTheme(theme: Theme): void {
+    const resolved = resolveTheme(theme);
+    if (resolved === this.themeFace) return;
+    this.themeFace = resolved;
+    const face = THEME_FACE[resolved];
+    this.elTheme.querySelector('svg')!.innerHTML = face.paths;
+    const title = `${face.label} — switch to ${face.next.toLowerCase()}`;
+    this.elTheme.title = title;
+    this.elTheme.setAttribute('aria-label', title);
   }
 
   noticeDismissed = false;

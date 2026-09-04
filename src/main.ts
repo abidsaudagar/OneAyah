@@ -18,6 +18,7 @@ import {
   closeAnyPanel, isPanelOpen, openAbout, openBackupPanel, openGoalPicker,
   openSettings, openStatsPanel, openUpgradeGate,
 } from './ui/panels.ts';
+import { nextTheme } from './platform/theme.ts';
 import { ReaderView } from './ui/reader.ts';
 import { renderStats } from './ui/stats.ts';
 import { TvView } from './ui/tv.ts';
@@ -127,6 +128,11 @@ const view = new ReaderView({
     store.dispatch({ t: 'dismissNotice' });
     paintState();
   },
+  // The header button only ever names a surface, so cycling off `system`
+  // pins the theme. The panel is where you hand the choice back to the OS.
+  onCycleTheme: () => store.dispatch({
+    t: 'patchSettings', patch: { theme: nextTheme(store.get().settings.theme) },
+  }),
 });
 
 function openBackup(): void {

@@ -85,7 +85,10 @@ export const SCRIPT_DIR: Readonly<Record<ArabicScript, string>> = {
   uthmani: 'ar-uthmani',
   indopak: 'ar-indopak',
 };
-export type Theme = 'light' | 'dark' | 'system';
+export type Theme = 'light' | 'dark' | 'paper' | 'system';
+/** The three surfaces the header button cycles through; `system` is panel-only. */
+export const CYCLE_THEMES = ['light', 'dark', 'paper'] as const;
+export const THEMES: readonly Theme[] = [...CYCLE_THEMES, 'system'];
 export type Accent = 'blue' | 'green' | 'purple' | 'black';
 
 export interface Settings {

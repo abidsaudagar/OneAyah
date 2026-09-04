@@ -32,6 +32,9 @@ button {
   flex: 1;
   width: 100%;
   background: var(--surface);
+  /* `none` in every theme but paper, which lays a printed-page fall-off over
+     the flat surface colour. */
+  background-image: var(--page-wash);
   display: flex;
   flex-direction: column;
 }
@@ -94,7 +97,7 @@ button {
 /* Equal side zones, so the metric group sits on the true centre line rather
    than being pushed off it by the wider tool cluster. */
 .hdr__tools { display: flex; gap: 4px; justify-content: flex-start; min-width: 108px; }
-.hdr__menu { display: flex; justify-content: flex-end; min-width: 108px; }
+.hdr__menu { display: flex; gap: 4px; justify-content: flex-end; min-width: 108px; }
 
 @keyframes goal-pop {
   0% { transform: scale(1); }
@@ -320,6 +323,11 @@ button {
 .swatches { display: flex; gap: 8px; }
 .swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; }
 .swatch[aria-checked='true'] { border-color: var(--ink); }
+/* Paper overrides the accent, so the swatches record a choice that is not
+   currently on screen. Muted, not disabled: the pick still holds for light
+   and dark, and hovering brings it back to full strength to be read. */
+.swatches--muted { opacity: 0.38; }
+.swatches--muted:hover { opacity: 1; }
 
 .font-opt { border: 1px solid var(--border-strong); border-radius: 7px; padding: 11px 14px; width: 100%; }
 .font-opt:hover { border-color: var(--accent); }
@@ -409,6 +417,9 @@ button {
 .tabs { display: flex; border: 1px solid var(--border-strong); border-radius: var(--r-md); overflow: hidden; }
 .tabs button { padding: 9px 16px; font: 500 11px/1 var(--font-mono); color: var(--muted); }
 .tabs button[aria-selected='true'] { background: var(--ink); color: var(--surface); }
+/* Four surfaces, not two: the theme row needs the tighter gutter to clear the
+   label beside it on a small phone. */
+.tabs--theme button { padding: 9px 11px; }
 
 .tiles { display: flex; gap: 28px; margin-bottom: 26px; flex-wrap: wrap; }
 .tile {
@@ -450,6 +461,7 @@ button {
 .tv {
   position: fixed; inset: 0; z-index: 30;
   background: var(--surface);
+  background-image: var(--page-wash);
   display: flex; align-items: center; justify-content: center;
   /* Keeps the reading area clear of the clock row and the footer hint. */
   padding: 84px 0 64px;

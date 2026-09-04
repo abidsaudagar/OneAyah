@@ -10,8 +10,8 @@ import { goalBonus, pointsPerVerse } from '../core/scoring.ts';
 import type { Snapshot } from '../core/state.ts';
 import { unlockProgress } from '../core/unlock.ts';
 import {
-  RUNGS, SCRIPT_OF, SESSION_LABELS, SESSION_LENGTHS, UNLOCK_DAYS,
-  type Accent, type ArabicFont, type Rung, type SessionLen, type Settings, type Theme,
+  RUNGS, SCRIPT_OF, SESSION_LABELS, SESSION_LENGTHS, THEMES, UNLOCK_DAYS,
+  type Accent, type ArabicFont, type Rung, type SessionLen, type Settings,
 } from '../types.ts';
 import { clockText, el, num } from './dom.ts';
 
@@ -181,7 +181,6 @@ const ACCENTS: { id: Accent; hex: string }[] = [
   { id: 'blue', hex: '#2a6fd6' }, { id: 'green', hex: '#1f7a5a' },
   { id: 'purple', hex: '#8a5cd6' }, { id: 'black', hex: '#141618' },
 ];
-const THEMES: Theme[] = ['light', 'dark', 'system'];
 
 export function openSettings(
   settings: Settings,
@@ -271,15 +270,24 @@ export function openSettings(
       el('div', { class: 'panel__section', text: 'APPEARANCE' }),
       el('div', { class: 'row', style: 'border-top:0;padding-top:0' },
         el('div', { class: 'row__label', text: 'Theme' }),
-        el('div', { class: 'tabs' }, ...THEMES.map((t) => el('button', {
+        el('div', { class: 'tabs tabs--theme' }, ...THEMES.map((t) => el('button', {
           text: t.toUpperCase(),
           attrs: { 'aria-selected': settings.theme === t },
           on: { click: () => set({ theme: t }) },
         }))),
       ),
       el('div', { class: 'row' },
-        el('div', { class: 'row__label', text: 'Accent' }),
-        el('div', { class: 'swatches' }, ...ACCENTS.map((a) => el('button', {
+        el('div', {},
+          el('div', { class: 'row__label', text: 'Accent' }),
+          // Paper pins the accent to its own ink, so the swatches would
+          // otherwise sit there doing nothing with no word as to why. The
+          // choice still registers -- it comes back on light or dark.
+          settings.theme === 'paper'
+            ? el('div', { class: 'row__sub', text: 'Paper uses its own ink' })
+            : null),
+        el('div', {
+          class: settings.theme === 'paper' ? 'swatches swatches--muted' : 'swatches',
+        }, ...ACCENTS.map((a) => el('button', {
           class: 'swatch',
           style: `background:${a.hex}`,
           attrs: { 'aria-checked': settings.accent === a.id, 'aria-label': a.id, role: 'radio' },

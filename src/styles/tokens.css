@@ -3,8 +3,9 @@
  * Every colour in the app must come from a token here -- no literals in component CSS.
  *
  * Three axes compose independently:
- *   theme  : light | dark   (:root vs [data-theme="dark"])
- *   accent : blue | green | purple | black ([data-accent])
+ *   theme  : light | dark | paper   (:root vs [data-theme=...])
+ *   accent : blue | green | purple | black ([data-accent]) -- except under
+ *            `paper`, which pins its own ink (see below)
  *   ramp   : derived from --accent via color-mix, so the heatmap follows the accent
  */
 
@@ -42,6 +43,9 @@
      it, and Geeza Pro covers the ones that do not. */
   --font-indopak: "Al Qalam Quran Majeed", "Geeza Pro", "Noto Naskh Arabic", serif;
   --font-amiri: "Amiri Quran", "Geeza Pro", "Noto Naskh Arabic", serif;
+
+  /* --- the printed-page wash, painted over --surface. Only `paper` uses it. --- */
+  --page-wash: none;
 
   /* --- radii --- */
   --r-sm: 4px;
@@ -95,8 +99,50 @@
 /* Black accent is unreadable on a dark ground; lift it to near-white. */
 :root[data-theme="dark"][data-accent="black"] { --accent: #e8eaec; --accent-hover: #fff; }
 
+/*
+ * Paper: the warm ground of a printed mushaf page -- cream stock, brown-black
+ * ink, and the faint centre-to-edge fall-off a bound page has under light.
+ * A third surface, not a third brightness: it sits beside light and dark
+ * rather than between them, so it keeps its own full set of tokens.
+ */
+:root[data-theme="paper"] {
+  --bg: #d3c29b;
+  --surface: #e7dbbc;
+  --subtle: #ded1ad;
+  --hover: #d8c9a1;
+
+  --ink: #33271a;
+  --secondary: #5b4a30;
+  --muted: #8a7550;
+  --hairline: #a08b62;
+  --faint: #94805a;
+
+  /* Lines are warm too: a neutral black hairline reads blue against cream. */
+  --border: rgba(58, 44, 20, 0.14);
+  --border-strong: rgba(58, 44, 20, 0.24);
+  --track: #d6c6a0;
+  --shadow-modal: 0 8px 30px rgba(58, 44, 20, 0.22);
+  --shadow-card: 0 1px 3px rgba(58, 44, 20, 0.14);
+
+  --page-wash: radial-gradient(125% 95% at 50% 0%, #f0e6cd 0%, #e7dbbc 46%, #d7c69f 100%);
+
+  color-scheme: light;
+}
+
+/*
+ * Paper pins the accent. The four presets are all cold next to cream -- blue
+ * especially, which fights the page rather than sitting on it -- so the accent
+ * here is the page's own ink, one shade warmer and richer than the body text
+ * so it still reads AS an accent instead of vanishing into the ayah.
+ *
+ * The extra [data-accent] carries this past all four preset rules on
+ * specificity rather than on source order, so moving either block is safe.
+ * The reader's stored accent is untouched: it applies again on light or dark.
+ */
+:root[data-theme="paper"][data-accent] { --accent: #5a3d1c; --accent-hover: #3c2810; }
+
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme="light"]):not([data-theme="paper"]) {
     --bg: #0f1113;
     --surface: #16181a;
     --subtle: #1c1f22;
@@ -116,5 +162,5 @@
 
     color-scheme: dark;
   }
-  :root:not([data-theme="light"])[data-accent="black"] { --accent: #e8eaec; --accent-hover: #fff; }
+  :root:not([data-theme="light"]):not([data-theme="paper"])[data-accent="black"] { --accent: #e8eaec; --accent-hover: #fff; }
 }

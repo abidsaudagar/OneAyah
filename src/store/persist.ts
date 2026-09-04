@@ -5,8 +5,8 @@ import { initialState } from '../core/state.ts';
 import { createStore, quarantine, type Store, type WriteResult } from '../platform/storage.ts';
 import { DEFAULT_SETTINGS } from '../core/state.ts';
 import {
-  ARABIC_FONTS, RETIRED_FONTS, RUNGS, SESSION_LENGTHS,
-  type ArabicFont, type PersistedState, type Rung, type Settings,
+  ARABIC_FONTS, RETIRED_FONTS, RUNGS, SESSION_LENGTHS, THEMES,
+  type ArabicFont, type PersistedState, type Rung, type Settings, type Theme,
 } from '../types.ts';
 
 export const STORAGE_KEY = 'qread.state.v1';
@@ -35,6 +35,9 @@ export function repair(raw: unknown, nowMs: number): PersistedState | null {
     s.arabicFont = RETIRED_FONTS[s.arabicFont as string] ?? DEFAULT_SETTINGS.arabicFont;
   }
   if (s.autoAdvanceSec !== null) s.autoAdvanceSec = clamp(Number(s.autoAdvanceSec) || 12, 5, 30);
+  // An unknown theme would be stamped straight onto data-theme, where it
+  // matches no rule and leaves the app on the light palette silently.
+  if (!THEMES.includes(s.theme as Theme)) s.theme = DEFAULT_SETTINGS.theme;
   s.showTranslation = s.showTranslation === true;
 
   const days: PersistedState['days'] = {};
