@@ -17,7 +17,7 @@ import { closeDrawer, isDrawerOpen, openDrawer } from './ui/drawer.ts';
 import { el, qs } from './ui/dom.ts';
 import {
   closeAnyPanel, isPanelOpen, openAbout, openBackupPanel, openGoalPicker, openSessionComplete,
-  openSettings, openUpgradeGate,
+  openSettings, openStatsPanel, openUpgradeGate,
 } from './ui/panels.ts';
 import { ReaderView } from './ui/reader.ts';
 import { renderStats } from './ui/stats.ts';
@@ -42,6 +42,8 @@ let sessionStartVerses = 0;
 
 let tv: TvView | null = null;
 let autoTimer: number | undefined;
+/** Set while the stats panel is open, so live updates reach it. */
+let statsHost: HTMLElement | null = null;
 
 /* --------------------------------------------------------------- appearance */
 
@@ -124,6 +126,7 @@ const view = new ReaderView({
     (n) => void goToSurah(n, 0)),
   onOpenFullscreen: () => void enterFullscreen(),
   onOpenBackup: () => openBackup(),
+  onOpenStats: () => openStatsPanel(paintStats),
   onDismissNotice: () => {
     view.noticeDismissed = true;
     store.dispatch({ t: 'dismissNotice' });
@@ -256,7 +259,14 @@ function paintState(): void {
   applyAppearance(snap.settings);
   view.paintState(snap, store.degraded);
   tv?.paintState(snap);
-  renderStats(view.statsHost, store.get().days, snap.today, range, (r) => { range = r; paintState(); });
+  if (statsHost !== null) paintStats(statsHost);
+}
+
+/** Renders the analytics into whichever host the stats panel handed us. */
+function paintStats(host: HTMLElement): void {
+  statsHost = host;
+  const snap = store.snapshot();
+  renderStats(host, store.get().days, snap.today, range, (r) => { range = r; paintStats(host); });
 }
 
 function paintClock(): void {

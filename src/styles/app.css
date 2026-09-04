@@ -30,10 +30,8 @@ button {
 
 .shell {
   flex: 1;
-  width: min(1280px, 100%);
-  margin: 0 auto;
+  width: 100%;
   background: var(--surface);
-  border-inline: 1px solid var(--border);
   display: flex;
   flex-direction: column;
 }
@@ -42,11 +40,10 @@ button {
 
 .hdr {
   display: grid;
-  grid-template-columns: 32px repeat(5, minmax(0, 1fr)) 72px;
+  grid-template-columns: 108px repeat(5, minmax(0, 1fr)) 32px;
   align-items: center;
   gap: 30px;
   padding: 22px 26px 18px;
-  border-bottom: 1px solid var(--border);
 }
 
 .metric__label {
@@ -96,11 +93,14 @@ button {
   opacity: 0.42; cursor: pointer; color: var(--ink);
 }
 .icon-btn:hover { opacity: 1; background: var(--hover); }
-.hdr__tools { display: flex; gap: 4px; justify-content: flex-end; }
+.hdr__tools { display: flex; gap: 4px; justify-content: flex-start; }
+.hdr__menu { display: flex; justify-content: flex-end; }
 
 /* -------------------------------------------------------------------- reader */
 
-.reader { flex: 1; display: flex; flex-direction: column; }
+/* Centred in whatever height is left, so the ayah sits in the middle of the
+   frame instead of riding the top with a void underneath. */
+.reader { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 
 .ayah {
   min-height: 300px;
@@ -153,15 +153,14 @@ button {
 }
 
 /* The dwell gate, shown only as a hairline under the ayah while it fills. */
-.dwell { height: 1px; background: var(--track); margin: 0 26px; overflow: hidden; }
-.dwell__fill { height: 100%; width: 0; background: var(--accent); opacity: 0.5; }
+.dwell { height: 1px; margin: 0 26px; overflow: hidden; }
+.dwell__fill { height: 100%; width: 0; background: var(--accent); opacity: 0.35; }
 
 /* -------------------------------------------------------------------- banner */
 
 .banner {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 26px 14px;
-  border-top: 1px solid var(--border);
   font: 400 11px/1.5 var(--font-ui);
   color: var(--faint);
 }
@@ -196,6 +195,8 @@ button {
   max-height: 100%; overflow: auto;
 }
 .panel--wide { width: 620px; }
+.panel--stats { width: 1180px; padding: 0; }
+.panel--stats .stats { padding: 26px 28px 28px; }
 .panel--narrow { width: 420px; }
 .panel__title { font: 600 15px/1.3 var(--font-ui); margin: 0 0 5px; }
 .panel__lede { font: 400 12.5px/1.6 var(--font-ui); color: var(--muted); margin: 0 0 20px; }
@@ -414,19 +415,18 @@ button {
 /* ------------------------------------------------------------------ responsive */
 
 @media (max-width: 1023px) {
-  .hdr { grid-template-columns: 32px repeat(3, minmax(0, 1fr)) 72px; gap: 20px; row-gap: 18px; }
-  .hdr__tools { grid-column: 5; }
-  .metric--wrap { grid-column: span 1; }
+  .hdr { grid-template-columns: 108px repeat(3, minmax(0, 1fr)) 32px; gap: 20px; row-gap: 18px; }
 }
 
 @media (max-width: 767px) {
   .hdr {
-    grid-template-columns: 32px minmax(0, 1fr) 72px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 16px; row-gap: 16px; padding: 16px;
   }
-  .hdr__tools { grid-column: 3; grid-row: 1; }
+  .hdr__tools { grid-column: 1; grid-row: 1; }
   .metric--goal { grid-column: 2; grid-row: 1; }
-  .metric--session { grid-column: 1 / 3; grid-row: 2; }
+  .hdr__menu { grid-column: 3; grid-row: 1; }
+  .metric--session { grid-column: 1 / 4; grid-row: 2; }
   .metric--time, .metric--streak, .metric--points { display: none; }
   .ayah { min-height: 220px; padding: 24px 20px; }
   .translation { padding: 16px 20px 8px; }
@@ -435,6 +435,8 @@ button {
   .stats { padding: 20px 16px; }
   .drawer { width: 100%; }
   .panel { padding: 20px; }
+  .panel--stats { padding: 0; }
+  .panel--stats .stats { padding: 18px 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

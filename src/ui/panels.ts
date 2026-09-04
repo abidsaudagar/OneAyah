@@ -371,6 +371,28 @@ export function openSessionComplete(
   ));
 }
 
+/* -------------------------------------------------------------------- stats */
+
+/**
+ * Streak and analytics, moved off the reading screen and behind the header's
+ * chart icon: the first screen should be the ayah, not a wall of numbers.
+ */
+export function openStatsPanel(render: (host: HTMLElement) => void): void {
+  openModal((close) => {
+    const host = el('div', {});
+    render(host);
+    return el('div', {
+      class: 'panel panel--stats', attrs: { role: 'dialog', 'aria-label': 'Your reading' },
+    },
+      host,
+      // .btns supplies the flex context the button's `flex: 1` needs; without
+      // it the button collapses to its own text width.
+      el('div', { class: 'btns', style: 'margin:0;padding:0 28px 24px' },
+        el('button', { class: 'btn btn--primary', text: 'CLOSE', on: { click: close } })),
+    );
+  });
+}
+
 /* -------------------------------------------------------------------- about */
 
 export function openAbout(): void {

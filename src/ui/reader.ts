@@ -20,6 +20,7 @@ export interface ReaderCallbacks {
   onOpenDrawer: () => void;
   onOpenFullscreen: () => void;
   onOpenBackup: () => void;
+  onOpenStats: () => void;
   onDismissNotice: () => void;
 }
 
@@ -56,7 +57,6 @@ export class ReaderView {
   private readonly elNext: HTMLButtonElement;
   private readonly elBanner: HTMLElement;
   private elBannerText!: HTMLElement;
-  readonly statsHost: HTMLElement;
 
   constructor(cb: ReaderCallbacks) {
     const metric = (
@@ -86,7 +86,19 @@ export class ReaderView {
     );
 
     const header = el('header', { class: 'hdr' },
-      icon('<path d="M2 4.5h14M2 9h14M2 13.5h14"/>', 'Surahs', cb.onOpenDrawer),
+      el('div', { class: 'hdr__tools' },
+        // A slider pair, matching the design canvas's own settings glyph --
+        // the previous eight-rayed circle read as a sun, not as settings.
+        icon('<path d="M2.5 6.5h13M2.5 11.5h13"/>'
+          + '<circle cx="6.5" cy="6.5" r="2.4" fill="var(--surface)"/>'
+          + '<circle cx="11.5" cy="11.5" r="2.4" fill="var(--surface)"/>',
+        'Settings', cb.onOpenSettings),
+        // Three bars, not another pair of corner arrows -- the previous glyph
+        // was near-indistinguishable from the fullscreen icon beside it.
+        icon('<path d="M3.5 15.5v-4M9 15.5V4.5M14.5 15.5v-7"/>', 'Your reading', cb.onOpenStats),
+        icon('<path d="M2 6.5V2h4.5M11.5 2H16v4.5M16 11.5V16h-4.5M6.5 16H2v-4.5"/>',
+          'Fullscreen', cb.onOpenFullscreen),
+      ),
       el('div', { class: 'metric metric--goal' }, goalBtn),
       metric('metric--session', 'SESSION LEFT',
         el('div', { class: 'metric__value' }, this.elTimer, this.elTimerOf),
@@ -96,12 +108,8 @@ export class ReaderView {
         el('div', { class: 'metric__value' }, this.elStreak, el('span', { class: 'metric__unit', text: 'days' })),
         this.elMult),
       metric('metric--points', 'POINTS', el('div', { class: 'metric__value' }, this.elPoints), this.elPointsToday),
-      el('div', { class: 'hdr__tools' },
-        icon('<circle cx="9" cy="9" r="2.5"/><path d="M9 1.5v2M9 14.5v2M16.5 9h-2M3.5 9h-2M14.3 3.7l-1.4 1.4M5.1 12.9l-1.4 1.4M14.3 14.3l-1.4-1.4M5.1 5.1L3.7 3.7"/>',
-          'Settings', cb.onOpenSettings),
-        icon('<path d="M2 6.5V2h4.5M11.5 2H16v4.5M16 11.5V16h-4.5M6.5 16H2v-4.5"/>',
-          'Fullscreen', cb.onOpenFullscreen),
-      ),
+      el('div', { class: 'hdr__menu' },
+        icon('<path d="M2 4.5h14M2 9h14M2 13.5h14"/>', 'Surahs', cb.onOpenDrawer)),
     );
 
     this.elAyah = el('div', { class: 'ayah__text', attrs: { dir: 'rtl', lang: 'ar' } });
@@ -120,7 +128,6 @@ export class ReaderView {
     });
 
     this.elBanner = el('div', { class: 'banner', attrs: { hidden: true } });
-    this.statsHost = el('section', {});
 
     this.root = el('div', { class: 'shell' },
       header,
@@ -134,7 +141,6 @@ export class ReaderView {
           this.elNext),
       ),
       this.elBanner,
-      this.statsHost,
     );
 
     this.buildBanner(cb);
