@@ -14,6 +14,18 @@ export type DayMap = Readonly<Record<DayKey, DayRecord>>;
 export const sortedKeys = (days: DayMap): DayKey[] => Object.keys(days).sort();
 
 /**
+ * Did the reader actually read on this day?
+ *
+ * A record can exist with `v: 0` -- time accrues from the moment the reader
+ * opens the app, before any verse has cleared the dwell gate. Such a day is
+ * NOT a read day: it breaks the streak and shows grey on the heatmap, which is
+ * the honest reading of "the day passed empty".
+ */
+export const didRead = (days: DayMap, key: DayKey): boolean => (days[key]?.v ?? 0) >= 1;
+
+const readKeys = (days: DayMap): DayKey[] => sortedKeys(days).filter((k) => didRead(days, k));
+
+/**
  * Days read in an unbroken run ending today.
  *
  * If today has no record yet -- 04:00, nothing read -- counting starts at
@@ -21,9 +33,9 @@ export const sortedKeys = (days: DayMap): DayKey[] => Object.keys(days).sort();
  * rather than dropping to 0 until they read again.
  */
 export function currentStreak(days: DayMap, todayKey: DayKey): number {
-  let cursor = days[todayKey] ? todayKey : addDays(todayKey, -1);
+  let cursor = didRead(days, todayKey) ? todayKey : addDays(todayKey, -1);
   let n = 0;
-  while (days[cursor]) {
+  while (didRead(days, cursor)) {
     n++;
     cursor = addDays(cursor, -1);
   }
@@ -31,7 +43,7 @@ export function currentStreak(days: DayMap, todayKey: DayKey): number {
 }
 
 export function longestStreak(days: DayMap): number {
-  const keys = sortedKeys(days);
+  const keys = readKeys(days);
   let best = 0;
   let run = 0;
   let prev: DayKey | null = null;
@@ -45,7 +57,7 @@ export function longestStreak(days: DayMap): number {
 
 /** The span of the longest run, for the "Feb-Mar 2026" caption on the tile. */
 export function longestStreakSpan(days: DayMap): [DayKey, DayKey] | null {
-  const keys = sortedKeys(days);
+  const keys = readKeys(days);
   if (keys.length === 0) return null;
   let best = 0;
   let bestEnd: DayKey = keys[0]!;
@@ -59,10 +71,10 @@ export function longestStreakSpan(days: DayMap): [DayKey, DayKey] | null {
   return [addDays(bestEnd, -(best - 1)), bestEnd];
 }
 
-export const daysRead = (days: DayMap): number => Object.keys(days).length;
+export const daysRead = (days: DayMap): number => readKeys(days).length;
 
 export function firstDay(days: DayMap): DayKey | null {
-  const keys = sortedKeys(days);
+  const keys = readKeys(days);
   return keys.length ? keys[0]! : null;
 }
 
