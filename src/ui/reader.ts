@@ -13,6 +13,8 @@ import type { Surah } from '../data/quran.ts';
 export interface ReaderCallbacks {
   onPrev: () => void;
   onNext: () => void;
+  /** Jump within the current surah; 1-based, already clamped to its length. */
+  onJumpToAyah: (ayah: number) => void;
   onOpenGoal: () => void;
   onOpenSettings: () => void;
   onOpenDrawer: () => void;
@@ -39,6 +41,12 @@ export class ReaderView {
   private readonly elAyahBox: HTMLElement;
   private readonly elTrans: HTMLElement;
   private readonly elLocator: HTMLElement;
+  private elLocAyah!: HTMLElement;
+  private elLocInput!: HTMLInputElement;
+  private elLocSurah!: HTMLButtonElement;
+  private elLocTotal!: HTMLElement;
+  /** Length of the surah on screen, so a typed ayah can be clamped to it. */
+  private ayahCount = 1;
   private elHints!: HTMLElement;
   private readonly elGoalCount: HTMLElement;
   private readonly elGoalBar: HTMLElement;
@@ -118,7 +126,7 @@ export class ReaderView {
     this.elAyah = el('div', { class: 'ayah__text', attrs: { dir: 'rtl', lang: 'ar' } });
     this.elAyahBox = el('div', { class: 'ayah' }, this.elAyah);
     this.elTrans = el('p', { class: 'translation__text' });
-    this.elLocator = el('div', { class: 'locator' });
+    this.elLocator = this.buildLocator(cb);
     this.elHints = el('div', { class: 'hints' },
       ...([['← →', 'ayah'], ['[ ]', 'text size'], ['T', 'translation'], ['F', 'fullscreen']] as const)
         .map(([k, what]) => el('span', {}, el('kbd', { text: k }), what)));
@@ -148,6 +156,76 @@ export class ReaderView {
     this.buildBanner(cb);
   }
 
+  /**
+   * The line under the translation. It reads as plain text and keeps the same
+   * type, but the surah name is a button onto the surah drawer, and the ayah
+   * number opens a jump field on double-click -- deliberately double, so a
+   * stray click while reading never turns the line into an input.
+   */
+  private buildLocator(cb: ReaderCallbacks): HTMLElement {
+    this.elLocSurah = el('button', {
+      class: 'locator__surah',
+      attrs: { type: 'button', title: 'Browse surahs' },
+      on: { click: cb.onOpenDrawer },
+    });
+
+    this.elLocAyah = el('span', {
+      class: 'locator__ayah',
+      attrs: { title: 'Double-click to jump to an ayah' },
+      on: { dblclick: () => this.beginAyahEdit() },
+    });
+
+    this.elLocInput = el('input', {
+      class: 'locator__input',
+      attrs: {
+        type: 'text', inputmode: 'numeric', hidden: true,
+        'aria-label': 'Go to ayah', autocomplete: 'off',
+      },
+      on: {
+        // The field is exactly as wide as what is in it, so the rest of the
+        // line does not shift as digits are typed.
+        input: () => this.sizeAyahInput(),
+        keydown: (e: KeyboardEvent) => {
+          if (e.key === 'Enter') { e.preventDefault(); this.commitAyahEdit(cb); }
+          else if (e.key === 'Escape') { e.preventDefault(); this.endAyahEdit(); }
+        },
+        // Clicking away abandons the edit; Enter is the only way to commit,
+        // so a half-typed number can never move the reader on its own.
+        blur: () => this.endAyahEdit(),
+      },
+    });
+
+    this.elLocTotal = el('span', { class: 'locator__total' });
+
+    return el('div', { class: 'locator' },
+      this.elLocSurah, ' · ', this.elLocAyah, this.elLocInput, this.elLocTotal);
+  }
+
+  private sizeAyahInput(): void {
+    this.elLocInput.style.width = `${Math.max(1, this.elLocInput.value.length)}ch`;
+  }
+
+  private beginAyahEdit(): void {
+    this.elLocInput.value = this.elLocAyah.textContent ?? '';
+    this.sizeAyahInput();
+    this.elLocAyah.hidden = true;
+    this.elLocInput.hidden = false;
+    this.elLocInput.focus();
+    this.elLocInput.select();
+  }
+
+  private endAyahEdit(): void {
+    this.elLocInput.hidden = true;
+    this.elLocAyah.hidden = false;
+  }
+
+  private commitAyahEdit(cb: ReaderCallbacks): void {
+    const typed = Number.parseInt(this.elLocInput.value.trim(), 10);
+    this.endAyahEdit();
+    if (!Number.isFinite(typed)) return;
+    cb.onJumpToAyah(Math.min(Math.max(1, typed), this.ayahCount));
+  }
+
   private buildBanner(cb: ReaderCallbacks): void {
     this.elBannerText = el('span', {},
         'Saved in this browser only — clearing site data wipes it. ',
@@ -166,7 +244,12 @@ export class ReaderView {
     this.elTrans.textContent = surah.en[index] ?? '';
     this.elTrans.style.fontSize = `${settings.translationSize}px`;
     this.elTrans.hidden = !settings.showTranslation;
-    this.elLocator.textContent = `${surah.meta.tr} · ${index + 1} of ${surah.meta.c}`;
+    this.ayahCount = surah.meta.c;
+    this.elLocSurah.textContent = surah.meta.tr;
+    this.elLocAyah.textContent = String(index + 1);
+    this.elLocTotal.textContent = ` of ${surah.meta.c}`;
+    // A jump lands here too, so an edit left hanging is closed by its result.
+    this.endAyahEdit();
     this.elPrev.disabled = surah.meta.n === 1 && index === 0;
     this.elNext.disabled = surah.meta.n === 114 && index === surah.meta.c - 1;
   }

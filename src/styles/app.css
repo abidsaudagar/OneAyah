@@ -161,6 +161,20 @@ button {
   color: var(--muted);
   margin-top: 14px;
 }
+/* Both controls read as the same quiet line of text they replaced: the type,
+   colour and spacing are inherited, and only hover admits they are clickable. */
+.locator__surah:hover { color: var(--ink); }
+.locator__ayah { cursor: text; }
+.locator__ayah:hover { color: var(--ink); }
+.locator__input {
+  font: inherit; color: var(--ink); background: none;
+  border: 0; padding: 0; margin: 0; text-align: center;
+  /* The width is set in ch from the digit count and the box is pinned to the
+     same 1em as the text it replaces, so opening the field shifts nothing --
+     not the rest of the line, and not the arrows under it. */
+  height: 1em; line-height: 1;
+}
+.locator__input:focus { outline: none; }
 
 .nav {
   display: flex; align-items: center; justify-content: center; gap: 22px;

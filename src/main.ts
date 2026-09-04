@@ -92,6 +92,9 @@ async function step(direction: 1 | -1): Promise<void> {
 const view = new ReaderView({
   onPrev: () => void step(-1),
   onNext: () => void step(1),
+  // A typed jump stays inside the surah on screen, and never credits a verse:
+  // only moving forward through the reader banks anything.
+  onJumpToAyah: (ayah) => void goToSurah(surah.meta.n, ayah - 1),
   onOpenGoal: () => {
     const snap = store.snapshot();
     openGoalPicker(snap, (r: Rung) => store.dispatch({ t: 'setRung', rung: r, nowMs: Date.now() }));
