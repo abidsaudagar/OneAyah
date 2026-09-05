@@ -138,6 +138,64 @@ button {
 }
 .metric--goal.is-celebrating .metric__chip { animation: goal-chip 2s ease-out; }
 
+/* The first visit. The chip is borrowed rather than a node added: before any
+   verse is credited it names what today asks for, and from the first verse
+   onward it is only ever GOAL MET. The two states cannot overlap -- one needs
+   nothing read, the other needs a goal's worth. */
+.metric--goal.is-first-visit .metric__chip { opacity: 1; color: var(--accent); }
+.metric--goal.is-first-visit .bar { animation: goal-hint 2.6s ease-out 3; }
+@keyframes goal-hint {
+  0%, 62%, 100% { box-shadow: 0 0 0 0 transparent; }
+  20% { box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 26%, transparent); }
+}
+
+/* ------------------------------------------------------------- celebration */
+
+/* Anchored inside the goal metric, which is already position: relative -- so
+   the arrow points at its own parent and there is no rectangle to measure and
+   nothing to reposition on a resize. It is absolute, so the header's grid does
+   not move under it, and it hangs BELOW the header, never over the ayah. */
+.celebrate {
+  position: absolute; top: calc(100% + 16px); left: -12px;
+  width: max-content; max-width: min(300px, calc(100vw - 32px));
+  padding: 13px 15px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-modal);
+  z-index: 5;
+  /* Nothing here is a control. A click meant for the ayah must reach it. */
+  pointer-events: none;
+  animation: celebrate-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.05) both;
+}
+.celebrate--arrow { padding-left: 44px; }
+.celebrate--leaving { opacity: 0; transition: opacity 260ms ease; }
+
+@keyframes celebrate-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Up and slightly left, out of the card and into the goal button above it. */
+.celebrate__arrow {
+  position: absolute; left: 14px; top: -14px;
+  color: var(--accent); opacity: 0.75;
+}
+
+.celebrate__head {
+  margin: 0; font: 500 14px/1.25 var(--font-mono); color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.celebrate__body { margin: 5px 0 0; font: 400 12px/1.5 var(--font-ui); color: var(--secondary); }
+.celebrate__teach {
+  margin: 9px 0 0; padding-top: 9px; border-top: 1px solid var(--border);
+  font: 400 11.5px/1.5 var(--font-ui); color: var(--muted);
+}
+
+/* Fullscreen: the goal readout sits top-right, so the card hangs under it and
+   is pulled back inside the frame rather than off the edge of the screen. */
+.tv__goal .celebrate { left: auto; right: 0; top: calc(100% + 14px); }
+
 /* -------------------------------------------------------------------- reader */
 
 /* Whatever height the header and the banner leave. Nothing is centred here:

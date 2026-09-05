@@ -26,9 +26,9 @@ Zero runtime dependencies. Measured gzipped, which is what GitHub Pages serves.
 
 | | gzip |
 |---|---|
-| App shell (JS + CSS + HTML) | 20.3 KB |
+| App shell (JS + CSS + HTML) | 25.9 KB |
 | Fonts (Al Qalam, Amiri Quran, IBM Plex Mono) | 137 KB |
-| First visit — shell + fonts + Al-Fātiḥah | **161 KB** |
+| First visit — shell + fonts + Al-Fātiḥah | **166 KB** |
 | Complete Qur'an, all three texts, cached for offline | 973 KB |
 | Everything, once fully offline | 1.10 MB |
 

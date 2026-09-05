@@ -7,7 +7,11 @@
  * is offered as an opt-in. The ayah still SITS STILL: this holds each verse for
  * a fixed dwell and then moves on. It is not scrolling text.
  */
+import type { Celebration } from '../core/celebrate.ts';
+import { celebrationCopy } from '../core/celebrate.ts';
 import type { Snapshot } from '../core/state.ts';
+import { celebrationCard, type CelebrationCard } from './celebration.ts';
+import { confetti } from './confetti.ts';
 import { clockText, el, tapOnly } from './dom.ts';
 import { Pager } from './pages.ts';
 import type { Surah } from '../data/quran.ts';
@@ -33,6 +37,9 @@ export class TvView {
   /** An ayah too long for the frame, split into the parts it is read in. */
   private readonly pager = new Pager();
   private pages: string[] = [''];
+  private readonly elGoal: HTMLElement;
+  private card: CelebrationCard | null = null;
+  private stopConfetti: (() => void) | null = null;
 
   constructor(cb: TvCallbacks) {
     this.elClock = el('div', { class: 'tv__clock', text: '00:00' });
@@ -48,10 +55,12 @@ export class TvView {
     this.elStack = el('div', { class: 'tv__stack' }, this.elAyah, this.elTrans);
     this.elAuto = el('span', { class: 'tv__auto' });
     this.elPart = el('div', { class: 'tv__part', attrs: { hidden: true } });
+    this.elGoal = el('div', { class: 'tv__goal' },
+      el('div', { class: 'bar' }, this.elBar), this.elCount);
 
     this.root = el('div', { class: 'tv', attrs: { role: 'dialog', 'aria-label': 'Fullscreen reader' } },
       this.elClock,
-      el('div', { class: 'tv__goal' }, el('div', { class: 'bar' }, this.elBar), this.elCount),
+      this.elGoal,
       // Outside the stack, and absolutely placed: the stack's height is the
       // frame the ayah is paged against, so anything added INSIDE it would
       // quietly shorten the box the split measures.
@@ -157,5 +166,27 @@ export class TvView {
 
   paintClock(remainingSec: number): void {
     this.elClock.textContent = clockText(remainingSec);
+  }
+
+  /**
+   * The same moment as in the reader, minus the arrow: fullscreen has a goal
+   * readout but no goal button, so there is nothing to point at. The teaching
+   * survives as the card's own last line, which is where it says the useful
+   * part anyway.
+   */
+  celebrateGoal(earned: Celebration): void {
+    this.stopConfetti?.();
+    this.stopConfetti = confetti(earned.particles);
+    this.card?.dismiss();
+    this.card = celebrationCard(celebrationCopy(earned), false);
+    this.elGoal.append(this.card.root);
+  }
+
+  /** Called on the way out, so nothing is left painting over a removed overlay. */
+  teardown(): void {
+    this.card?.dismiss();
+    this.card = null;
+    this.stopConfetti?.();
+    this.stopConfetti = null;
   }
 }

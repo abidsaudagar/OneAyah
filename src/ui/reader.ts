@@ -5,10 +5,14 @@
  * references and textContent -- the same approach the design's own prototype
  * used. Nothing here diffs a tree sixty times a second.
  */
+import type { Celebration } from '../core/celebrate.ts';
+import { celebrationCopy, firstVisitChip } from '../core/celebrate.ts';
 import type { Snapshot } from '../core/state.ts';
 import { resolveTheme } from '../platform/theme.ts';
 import type { Theme } from '../types.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
+import { celebrationCard, type CelebrationCard } from './celebration.ts';
+import { confetti } from './confetti.ts';
 import { clockText, el, num, tapOnly, type Child } from './dom.ts';
 import { Pager } from './pages.ts';
 import type { Surah } from '../data/quran.ts';
@@ -90,6 +94,12 @@ export class ReaderView {
   private elHints!: HTMLElement;
   private readonly elGoalCount: HTMLElement;
   private readonly elGoalBar: HTMLElement;
+  /** The chip above the goal bar. Says GOAL MET, or the ask on a first visit. */
+  private readonly elGoalChip: HTMLElement;
+  /** The card's anchor, and what the arrow points at. */
+  private readonly elGoalMetric: HTMLElement;
+  private card: CelebrationCard | null = null;
+  private stopConfetti: (() => void) | null = null;
   private readonly elTimer: HTMLElement;
   private readonly elTimerOf: HTMLElement;
   private readonly elTimerBar: HTMLElement;
@@ -131,6 +141,8 @@ export class ReaderView {
     this.elPoints = el('span', { class: 'metric__value', text: '0' });
     this.elPointsToday = el('span', { class: 'metric__sub', text: '' });
 
+    this.elGoalChip = el('span', { class: 'metric__chip', text: 'GOAL MET' });
+
     const goalBtn = el('button', {
       class: 'goal-btn', attrs: { type: 'button', title: 'Change your daily goal' },
       on: { click: cb.onOpenGoal },
@@ -140,8 +152,9 @@ export class ReaderView {
         this.elGoalCount,
         el('span', { class: 'metric__unit', text: 'verses' })),
       el('div', { class: 'bar' }, this.elGoalBar),
-      el('span', { class: 'metric__chip', text: 'GOAL MET' }),
+      this.elGoalChip,
     );
+    this.elGoalMetric = el('div', { class: 'metric metric--goal' }, goalBtn);
 
     this.elTheme = icon('', 'Theme', cb.onCycleTheme);
 
@@ -160,7 +173,7 @@ export class ReaderView {
           'Fullscreen', cb.onOpenFullscreen),
       ),
       el('div', { class: 'hdr__metrics' },
-        el('div', { class: 'metric metric--goal' }, goalBtn),
+        this.elGoalMetric,
         metric('metric--session', 'SESSION LEFT', [this.elTimer, this.elTimerOf],
           el('div', { class: 'bar' }, this.elTimerBar)),
         metric('metric--time', 'TIME READ', [this.elRead, this.elReadAll]),
@@ -433,6 +446,16 @@ export class ReaderView {
     // The hints stop earning their place once the habit is underway.
     this.elHints.hidden = snap.totals.verses >= 20;
 
+    // A reader who has never credited a verse is told what today asks for, in
+    // the chip that otherwise only ever says GOAL MET. The two can never
+    // collide: one needs no verses read, the other needs a goal's worth. It
+    // clears itself on the first verse, which is the one dismissal that
+    // cannot be got wrong.
+    const firstVisit = snap.totals.verses === 0;
+    this.elGoalChip.textContent = firstVisit
+      ? firstVisitChip(snap.effectiveRung) : 'GOAL MET';
+    this.elGoalMetric.classList.toggle('is-first-visit', firstVisit);
+
     // The warning earns its place only once there is progress worth losing --
     // or immediately if this browser is not saving anything at all.
     this.paintBanner(
@@ -467,17 +490,39 @@ export class ReaderView {
   }
 
   /**
-   * A brief, quiet acknowledgement when the daily goal lands. Deliberately
-   * restrained -- this is a Qur'an reader, not a slot machine -- and it
-   * reduces to nothing under prefers-reduced-motion.
+   * The daily goal landing.
+   *
+   * The quiet part is unconditional and is still the whole of an ordinary day:
+   * the counter pops, the bar rings, the chip says GOAL MET. This is a Qur'an
+   * reader, not a slot machine, and 364 days out of 365 that is all it does.
+   *
+   * `earned` is non-null only on the two moments that are worth more than that
+   * -- a reader's first goal ever, and the first goal met after crossing a
+   * streak multiplier tier -- and only then does the screen fill.
    */
-  celebrateGoal(): void {
-    const goal = this.root.querySelector('.metric--goal');
-    if (!goal) return;
+  celebrateGoal(earned: Celebration | null = null): void {
+    const goal = this.elGoalMetric;
     goal.classList.remove('is-celebrating');
-    void (goal as HTMLElement).offsetWidth; // restart the animation
+    void goal.offsetWidth; // restart the animation
     goal.classList.add('is-celebrating');
     setTimeout(() => goal.classList.remove('is-celebrating'), 2100);
+
+    if (earned === null) return;
+
+    // A second burst landing on the first is possible only through the dev
+    // handle, but a leaked canvas would paint over the ayah forever.
+    this.stopConfetti?.();
+    this.stopConfetti = confetti(earned.particles);
+
+    this.card?.dismiss();
+    this.card = celebrationCard(celebrationCopy(earned), earned.firstGoal !== null);
+    goal.append(this.card.root);
+  }
+
+  /** Takes the card down when the reader leaves for fullscreen mid-celebration. */
+  clearCelebration(): void {
+    this.card?.dismiss();
+    this.card = null;
   }
 
   flashVerseChange(): void {

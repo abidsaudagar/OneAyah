@@ -9,6 +9,7 @@ import './styles/app.css';
 import { createAppStore } from './app/store.ts';
 import { Session } from './app/session.ts';
 import type { Range } from './core/analytics.ts';
+import { celebrationFor } from './core/celebrate.ts';
 import { report, shouldAsk } from './core/feedback.ts';
 import { pointsPerVerse } from './core/scoring.ts';
 import { BUILD, FEEDBACK_FORM_URL } from './config.ts';
@@ -56,6 +57,16 @@ let autoTimer: number | undefined;
 let statsHost: HTMLElement | null = null;
 /** Seeded at boot, so arriving with the goal already met does not celebrate. */
 let goalWasMet = false;
+/**
+ * Set only across a `creditVerse` dispatch.
+ *
+ * The crossing alone is not enough to celebrate. Lowering the rung can also
+ * flip `goalMet` from false to true -- read three verses against a goal of
+ * five, then drop to three -- and the reader has not hit anything; they have
+ * moved the line. This is the difference between the two, and it is what the
+ * old guard's comment claimed to do without actually doing it.
+ */
+let creditingVerse = false;
 
 /* --------------------------------------------------------------- appearance */
 
@@ -104,7 +115,14 @@ async function step(direction: 1 | -1): Promise<void> {
   }
 
   if (direction === 1) {
-    store.dispatch({ t: 'creditVerse', id: globalId(), nowMs: Date.now() });
+    creditingVerse = true;
+    try {
+      store.dispatch({ t: 'creditVerse', id: globalId(), nowMs: Date.now() });
+    } finally {
+      // The store notifies synchronously, so paintState has already run and
+      // read the flag by the time this lands.
+      creditingVerse = false;
+    }
   }
 
   const next = index + direction;
@@ -237,6 +255,9 @@ async function enterFullscreen(): Promise<void> {
   // orphaned from `tv`, so its counters would never update again.
   if (tv !== null) return;
 
+  // A card anchored in the header is about to be covered by the overlay.
+  view.clearCelebration();
+
   tv = new TvView({
     onPrev: () => void step(-1),
     onNext: () => void step(1),
@@ -262,6 +283,7 @@ async function enterFullscreen(): Promise<void> {
 async function exitFullscreen(): Promise<void> {
   clearTimeout(autoTimer);
   autoTimer = undefined;
+  tv?.teardown();
   tv?.root.remove();
   tv = null;
   paintVerse(false);
@@ -379,9 +401,16 @@ function paintState(): void {
   tv?.paintState(snap);
   if (statsHost !== null) paintStats(statsHost);
 
-  // Only on the crossing, and only upward: dropping a rung can make goalMet
-  // true again, and re-celebrating that would be hollow.
-  if (snap.goalMet && !goalWasMet) view.celebrateGoal();
+  // Only on the crossing, only upward, and only when a VERSE carried it over.
+  if (snap.goalMet && !goalWasMet && creditingVerse) {
+    // Non-null only for a first goal or a newly crossed streak tier; every
+    // other day gets the quiet pop and nothing else.
+    const earned = celebrationFor(store.get().days, snap.today);
+    // Fullscreen has no goal button, so the card goes there without an arrow
+    // rather than pointing at a control that is not on screen.
+    if (tv !== null && earned !== null) tv.celebrateGoal(earned);
+    else view.celebrateGoal(earned);
+  }
   goalWasMet = snap.goalMet;
 }
 
