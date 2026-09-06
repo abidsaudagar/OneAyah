@@ -41,6 +41,8 @@ export class TvView {
   private readonly elCount: HTMLElement;
   private readonly elSurahTr: HTMLElement;
   private readonly elSurahAr: HTMLElement;
+  /** Which ayah of the surah is on screen, alongside the name: "· 255 of 286". */
+  private readonly elSurahNo: HTMLElement;
   private readonly elAyah: HTMLElement;
   private readonly elTrans: HTMLElement;
   private readonly elStack: HTMLElement;
@@ -66,10 +68,12 @@ export class TvView {
     this.elBar = el('div', { class: 'bar__fill' });
     this.elCount = el('div', { class: 'tv__count', text: '0/5' });
     // Named twice, transliteration then Arabic, the same pairing the reader's
-    // locator and the drawer use. The Arabic is its own span so `dir` isolates
-    // it and the separator between the two names cannot be reordered into it.
+    // locator and the drawer use, then the ayah's place in the surah -- so the
+    // line reads as a full reference from across a room. The Arabic is its own
+    // span so `dir` isolates it and the separators cannot be reordered into it.
     this.elSurahTr = el('span', { class: 'tv__surah-tr' });
     this.elSurahAr = el('span', { class: 'tv__surah-ar', attrs: { dir: 'rtl', lang: 'ar' } });
+    this.elSurahNo = el('span', { class: 'tv__surah-no' });
     this.elAyah = el('div', { class: 'tv__ayah', attrs: { dir: 'rtl', lang: 'ar' } });
     this.elTrans = el('p', { class: 'tv__translation' });
     this.elStack = el('div', { class: 'tv__stack' }, this.elAyah, this.elTrans);
@@ -86,7 +90,7 @@ export class TvView {
       // Outside the stack, and absolutely placed: the stack's height is the
       // frame the ayah is paged against, so anything added INSIDE it would
       // quietly shorten the box the split measures.
-      el('div', { class: 'tv__surah' }, this.elSurahTr, ' · ', this.elSurahAr),
+      el('div', { class: 'tv__surah' }, this.elSurahTr, ' · ', this.elSurahAr, ' · ', this.elSurahNo),
       // Ayah and translation ride in one stack, so the pair stays centred in
       // the frame instead of the Arabic jumping when T brings the English in.
       this.elStack,
@@ -134,6 +138,7 @@ export class TvView {
     this.elAyah.dataset.font = settings.arabicFont;
     this.elSurahTr.textContent = surah.meta.tr;
     this.elSurahAr.textContent = surah.meta.ar;
+    this.elSurahNo.textContent = `${index + 1} of ${surah.meta.c}`;
     // The translation is measured before the split, not after: it is painted
     // first so the height it takes is already out of what the Arabic can use.
     this.elTrans.textContent = surah.trans[index] ?? '';

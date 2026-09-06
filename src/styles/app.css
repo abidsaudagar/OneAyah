@@ -714,6 +714,7 @@ a.btn--primary { color: var(--surface); }
 }
 .tv__surah-tr { text-transform: uppercase; }
 .tv__surah-ar { font-family: var(--font-amiri); font-size: 19px; letter-spacing: 0; }
+.tv__surah-no { font-variant-numeric: tabular-nums; }
 /* The stack owns the padding and the centring; the ayah and its translation
    sit inside it, so showing the English shifts the pair, not the frame. Its
    own font-size is the one number both are measured from, which is what lets
