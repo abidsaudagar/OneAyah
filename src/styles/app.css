@@ -34,6 +34,14 @@ button {
 #app { height: 100dvh; display: flex; flex-direction: column; }
 
 .shell {
+  /* The notch, the rounded corners and the home indicator. Zero everywhere
+     else, so this line changes nothing on a desktop -- and it goes HERE, on
+     the element that paints the surface, rather than on #app: padding on the
+     frame would leave the inset strip showing the body colour behind it, and
+     an iPhone would wear a band of the wrong shade across the top. */
+  padding:
+    env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
   /* min-height: 0, not the flex default of auto: `auto` is the ayah's own text
      -- an ayah mid-split is momentarily taller than the frame it is being cut
      down to fit, and an auto minimum lets that stretch the shell, which grows
@@ -247,7 +255,6 @@ button {
   transition: opacity 0.12s ease;
 }
 .ayah__text[data-font='amiri-quran'] { font-family: var(--font-amiri); }
-.ayah--changing .ayah__text { opacity: 0; }
 
 /* A definite height, computed from the translation SIZE and nothing else:
    four lines of it plus the locator line under them. The ayah is sized against
@@ -334,6 +341,13 @@ button {
   padding: 3px 5px; margin-right: 5px; color: var(--muted);
 }
 .hints span { display: inline-flex; align-items: center; }
+.hints__set { display: contents; }
+/* Both faces of every hint and every arrow are built; exactly one is shown,
+   and which one is decided by whether the app attached its touch gestures --
+   the same single condition, rather than a media query kept in step by hand. */
+.hints__set--touch { display: none; }
+.nav__glyph--touch { display: none; }
+.tv__hint--touch { display: none; }
 
 /* -------------------------------------------------------------------- banner */
 
@@ -361,7 +375,9 @@ button {
   position: fixed; inset: 0; z-index: 20;
   background: rgba(0, 0, 0, 0.28);
   display: flex; align-items: center; justify-content: center;
-  padding: 24px;
+  padding:
+    calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right))
+    calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
   overscroll-behavior: contain;
 }
 .panel {
@@ -372,6 +388,7 @@ button {
   padding: 26px 28px;
   width: 520px; max-width: 100%;
   max-height: 100%; overflow: auto;
+  overscroll-behavior: contain;
 }
 .panel--wide { width: 620px; }
 .panel--stats { width: 1180px; padding: 0; }
@@ -601,22 +618,32 @@ a.btn--primary { color: var(--surface); }
   background: var(--surface);
   background-image: var(--page-wash);
   display: flex; align-items: center; justify-content: center;
-  /* Keeps the reading area clear of the clock row and the footer hint. */
-  padding: 84px 0 64px;
+  /* Keeps the reading area clear of the clock row and the footer hint, and --
+     since this is what an iPhone actually shows when `F` is pressed, Safari
+     having refused real fullscreen -- clear of the notch and the home
+     indicator too. Every inset is 0 on a desktop or a TV. */
+  padding:
+    calc(84px + env(safe-area-inset-top)) env(safe-area-inset-right)
+    calc(64px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
 }
 .tv__clock {
-  position: absolute; top: 26px; left: 32px;
+  position: absolute; top: calc(26px + env(safe-area-inset-top));
+  left: calc(32px + env(safe-area-inset-left));
   font: 500 22px/1 var(--font-mono); color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.tv__goal { position: absolute; top: 26px; right: 32px; display: flex; align-items: center; gap: 12px; }
+.tv__goal {
+  position: absolute;
+  top: calc(26px + env(safe-area-inset-top)); right: calc(32px + env(safe-area-inset-right));
+  display: flex; align-items: center; gap: 12px;
+}
 .tv__goal .bar { width: 120px; height: 8px; margin: 0; border-radius: 4px; }
 .tv__count { font: 500 11px/1 var(--font-mono); color: var(--muted); }
 /* Where in the Qur'an this is, held on its own line below the clock row: on a
    phone the clock and the goal bar leave no room between them for it. Quiet,
    in the chrome's mono, so it names the surah without competing with it. */
 .tv__surah {
-  position: absolute; top: 58px; left: 0; right: 0;
+  position: absolute; top: calc(58px + env(safe-area-inset-top)); left: 0; right: 0;
   display: flex; align-items: baseline; justify-content: center; gap: 8px;
   font: 400 11px/1 var(--font-mono); letter-spacing: 0.08em;
   color: var(--muted);
@@ -663,13 +690,14 @@ a.btn--primary { color: var(--surface); }
 }
 .tv__ayah[data-font='amiri-quran'] { font-family: var(--font-amiri); }
 .tv__foot {
-  position: absolute; bottom: 26px; left: 0; right: 0;
+  position: absolute; bottom: calc(26px + env(safe-area-inset-bottom)); left: 0; right: 0;
   display: flex; align-items: center; justify-content: center; gap: 20px;
+  padding: 0 16px; text-align: center;
   font: 400 11px/1 var(--font-mono); color: var(--hairline);
 }
 .tv__auto { color: var(--accent); }
 .tv__part {
-  position: absolute; left: 0; right: 0; bottom: 58px;
+  position: absolute; left: 0; right: 0; bottom: calc(58px + env(safe-area-inset-bottom));
   text-align: center;
   font: 400 11px/1 var(--font-mono); letter-spacing: 0.08em;
   color: var(--accent);
@@ -681,22 +709,60 @@ a.btn--primary { color: var(--surface); }
 
 /* ------------------------------------------------------------------ responsive */
 
+/* The ladder has one idea in it. Above 900px the metrics are a centred ROW,
+   sized by their own content and spaced by a shrinking gap -- that is the
+   desktop layout and it is untouched. Below 900px they become a GRID, and the
+   grid is what fixes the alignment: `auto-fit` lays as many equal columns as
+   will fit, so a tablet gets one clean row of five and a phone gets three and
+   two, with the columns lining up in both cases. The old rule reached for
+   `flex-wrap` instead, which wrapped items at whatever width they happened to
+   be and left a ragged second row; and before that it simply DELETED the time,
+   streak and points readouts on a phone, which is the device most of this is
+   read on. Nothing is hidden by width any more. */
+
 @media (max-width: 1199px) {
   .hdr__metrics { gap: 22px; }
 }
 
 @media (max-width: 900px) {
-  .hdr__metrics { gap: 20px; }
-  .metric--time, .metric--points { display: none; }
+  /* The metrics leave the middle of the header and take a row of their own.
+     Between the two clusters of icons there is only ~480px left at 768px wide,
+     which holds four of the five and wraps the last one out on its own -- the
+     ragged edge this whole block exists to remove. Given the full width they
+     lay out as one even row here and as three-and-two on a phone, columns
+     lining up in both. */
+  .hdr {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: 'tools . menu' 'metrics metrics metrics';
+    gap: 12px; padding: 12px 18px 14px;
+  }
+  .hdr__tools { grid-area: tools; }
+  .hdr__menu { grid-area: menu; }
+  .hdr__tools, .hdr__menu { min-width: 0; }
+  .hdr__metrics {
+    grid-area: metrics;
+    display: grid;
+    /* 92px is what the narrowest metric needs once its label sits on its own
+       line below. Five columns clear it at tablet width; three at phone width;
+       and the browser picks, so there is no breakpoint to keep in step. */
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    gap: 12px 16px;
+    width: 100%;
+  }
+  /* Label above, value and detail below. Stacking is what makes 92px enough:
+     "DAILY GOAL 0/5 verses" on one line needs 137px and would either clip or
+     force a column count no phone has room for. `flex: 1 0 100%` on the label
+     is the whole trick -- the line stays a flex row, the label just takes all
+     of the first one. */
+  .metric__line { flex-wrap: wrap; height: auto; row-gap: 5px; }
+  .metric__label { flex: 1 0 100%; }
+  .bar { margin-top: 6px; }
+  .metric__chip { top: -11px; }
 }
 
 @media (max-width: 767px) {
-  .hdr { gap: 12px; padding: 14px 16px; }
-  .hdr__tools, .hdr__menu { min-width: 0; }
-  /* Each metric still occupies a single line; it is the GROUP that wraps, so
-     a narrow phone shows goal above timer rather than clipping the timer. */
-  .hdr__metrics { gap: 6px 18px; justify-content: flex-start; flex-wrap: wrap; }
-  .metric--time, .metric--streak, .metric--points { display: none; }
+  .hdr { gap: 10px 12px; padding: 10px 14px 14px; }
+  .hdr__metrics { gap: 11px 14px; }
   .ayah { padding: 24px 20px; }
   /* A phone's lines are half a desktop's, so four of them hold half as much.
      Five here, and the ayah still keeps the larger share of the screen. */
@@ -704,10 +770,127 @@ a.btn--primary { color: var(--surface); }
   .nav { gap: 14px; }
   .nav__hint { display: none; }
   .stats { padding: 20px 16px; }
+  /* The title and the three-way range toggle do not both fit on 343px, and
+     `space-between` with no wrap pushed the toggle off the panel's edge. */
+  .stats__head { flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+  .tabs button { padding: 9px 12px; }
+  .tiles { gap: 14px; margin-bottom: 20px; }
+  .tile { min-width: 132px; padding: 14px 15px; }
+  .tile__value { font-size: 25px; }
   .drawer { width: 100%; }
   .panel { padding: 20px; }
   .panel--stats { padding: 0; }
   .panel--stats .stats { padding: 18px 16px; }
+}
+
+/* ----------------------------------------------------------------- touch */
+
+/* Everything below is gated on the app having actually attached its touch
+   gestures, not on a width -- `data-touch` is stamped on the root by the same
+   `pointer: coarse` check that decides whether a swipe does anything, so the
+   two can never disagree. A desktop never matches any of it. */
+
+:root[data-touch] .hints__set--keys { display: none; }
+:root[data-touch] .hints__set--touch { display: contents; }
+:root[data-touch] .tv__hint--keys { display: none; }
+:root[data-touch] .tv__hint--touch { display: inline; }
+
+/* Forward is leftward through the book here, so the pair swaps sides AND
+   faces: `next` moves to the left of the row and shows a left-pointing arrow,
+   `prev` to the right showing a right-pointing one. Reversing the flex row is
+   what moves them; the glyph swap is in the markup, one span per face. The DOM
+   order, and therefore the tab order and what a screen reader announces, is
+   unchanged -- previous is still read first, and both keep their own labels. */
+:root[data-touch] .nav { flex-direction: row-reverse; }
+:root[data-touch] .nav__glyph--keys { display: none; }
+:root[data-touch] .nav__glyph--touch { display: inline; }
+
+/* 44px, which is the smallest a finger can be relied on to hit. The glyph and
+   the icon inside are untouched -- this grows the target, not the drawing. */
+:root[data-touch] .icon-btn { width: 44px; height: 44px; }
+:root[data-touch] .nav__arrow {
+  width: auto; min-width: 64px; height: 44px; padding: 0 14px;
+}
+/* Named, not drawn: quiet mono caps in the same key the hint row and the
+   locator are set in, so the pair still reads as chrome rather than as a
+   call to action. */
+:root[data-touch] .nav__glyph--touch {
+  font: 500 10.5px/1 var(--font-mono); letter-spacing: 0.14em;
+}
+:root[data-touch] .hdr__tools,
+:root[data-touch] .hdr__menu { gap: 2px; margin: -6px -8px; }
+:root[data-touch] .nav { gap: 8px; padding-top: 10px; }
+
+/* `pan-y` leaves vertical scrolling to the browser -- the translation under
+   this still has to scroll -- and takes horizontal panning and pinch-zoom,
+   which are the two the reader means for the ayah. Scoped to the frame, so
+   pinching the header, a panel or the stats still zooms the page normally.
+   Safari ignores this for pinch and is stopped by `gesturestart` instead. */
+:root[data-touch] .ayah,
+:root[data-touch] .tv__stack { touch-action: pan-y; }
+
+/* A long press on Arabic text raises the selection handles and the callout
+   menu, which is a fight with every swipe that starts on the ayah. The English
+   below stays selectable: it is the part anyone would want to copy. */
+:root[data-touch] .ayah__text,
+:root[data-touch] .tv__ayah {
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+/* Same reason, on the one line that now answers to a press of its own. */
+:root[data-touch] .locator__ayah { -webkit-touch-callout: none; }
+
+/* Hover is a lie on a touch screen: the styles latch on after a tap and stay
+   until something else is touched. Only apply them where a pointer can leave. */
+@media (hover: none) {
+  .icon-btn:hover { opacity: 0.42; background: none; }
+  .nav__arrow:hover { color: var(--hairline); background: none; }
+  .goal-btn:hover { opacity: 1; }
+  .locator__surah:hover, .locator__ayah:hover { color: var(--muted); }
+}
+
+/* --------------------------------------------------------------- landscape */
+
+/* A phone on its side is ~390px tall: less vertical room than any window this
+   was drawn for. The metrics come out of the grid and back into one dense row
+   -- horizontal room is the thing there is plenty of -- and every band in the
+   column gives back what it can. Height-gated AND touch-gated, so a short
+   desktop window is not dragged into a layout meant for a phone. */
+@media (max-height: 560px) {
+  :root[data-touch] .hdr {
+    grid-template-areas: 'tools metrics menu';
+    padding: 8px 14px 6px; gap: 10px;
+  }
+  :root[data-touch] .hdr__metrics {
+    display: flex; flex-wrap: nowrap; justify-content: center;
+    gap: 16px; width: auto;
+  }
+  :root[data-touch] .metric__line { flex-wrap: nowrap; height: 16px; row-gap: 0; }
+  :root[data-touch] .metric__label { flex: none; }
+  /* The trailing detail goes first: "verses", "days", "of 1:10", the running
+     total and the multiplier are all glosses on a number that is still there. */
+  :root[data-touch] .metric__unit,
+  :root[data-touch] .metric__sub { display: none; }
+  :root[data-touch] .bar { margin-top: 5px; }
+  :root[data-touch] .ayah { padding: 12px 20px; }
+  :root[data-touch] .translation {
+    height: min(calc(4.2 * var(--trans-size, 18px) + 34px), 38vh);
+    padding: 10px 20px 6px;
+  }
+  :root[data-touch] .locator { margin-top: 8px; }
+  :root[data-touch] .nav { padding: 6px 20px 8px; gap: 8px; }
+  :root[data-touch] .hints { padding: 0 20px 10px; gap: 4px 14px; }
+  :root[data-touch] .banner { padding: 8px 20px 10px; }
+  /* The overlay's chrome closes in for the same reason. */
+  :root[data-touch] .tv {
+    padding:
+      calc(54px + env(safe-area-inset-top)) env(safe-area-inset-right)
+      calc(42px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+  }
+  :root[data-touch] .tv__clock { top: calc(12px + env(safe-area-inset-top)); }
+  :root[data-touch] .tv__goal { top: calc(12px + env(safe-area-inset-top)); }
+  :root[data-touch] .tv__surah { top: calc(38px + env(safe-area-inset-top)); }
+  :root[data-touch] .tv__foot { bottom: calc(12px + env(safe-area-inset-bottom)); }
+  :root[data-touch] .tv__part { bottom: calc(34px + env(safe-area-inset-bottom)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

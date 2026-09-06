@@ -16,6 +16,9 @@ import { BUILD, FEEDBACK_FORM_URL } from './config.ts';
 import { download, exportBlob, parseBackup, pickFile } from './store/backup.ts';
 import { globalIndex, loadMeta, loadSurah, prefetchSurah, type Surah } from './data/quran.ts';
 import { closeDrawer, isDrawerOpen, openDrawer } from './ui/drawer.ts';
+import { attachGestures, tapZonesWanted, touchCapable } from './ui/gestures.ts';
+import { clampSize } from './core/gesture.ts';
+import type { Slide, SlideDir } from './ui/slide.ts';
 import { el, qs } from './ui/dom.ts';
 import {
   closeAnyPanel, isPanelOpen, openAbout, openBackupPanel, openFeedbackPanel,
@@ -94,6 +97,53 @@ async function goToSurah(n: number, ayahIndex = 0): Promise<void> {
 }
 
 /**
+ * Whether a step in `direction` would move anything at all.
+ *
+ * Asked BEFORE the animation, never after: `step` returns silently at the two
+ * ends of the Qur'an, and playing an exit for a step that then does not happen
+ * would slide 1:1 off the screen and bring it straight back.
+ */
+function canStep(direction: 1 | -1): boolean {
+  const parts = activeView().pageCount();
+  if (direction === 1 ? page < parts - 1 : page > 0) return true;
+  const next = index + direction;
+  if (next < 0) return surah.meta.n !== 1;
+  if (next >= surah.meta.c) return surah.meta.n !== 114;
+  return true;
+}
+
+/** The slide belonging to whichever view the reader is actually looking at. */
+const activeSlide = (): Slide => (tv ?? view).slide;
+
+/**
+ * Every way of moving through the Qur'an goes through here -- arrow keys, the
+ * nav buttons, the overlay's tap halves, auto-advance, and every touch gesture.
+ * There is exactly one place a step is animated, so the motion cannot drift
+ * apart between the paths that cause it.
+ *
+ * The two halves sandwich the repaint: the ayah leaves, `step` swaps the text
+ * while the frame is empty, the new one arrives. Only the exit is awaited. The
+ * entry is fired and left to run, so a reader swiping faster than the animation
+ * is not made to wait for it -- the next step's exit cancels the entry still
+ * playing, which reads as the pages being turned quickly rather than as a queue
+ * draining.
+ */
+async function move(direction: 1 | -1): Promise<void> {
+  session.start();
+  if (!canStep(direction)) return;
+
+  const dir: SlideDir = direction === 1 ? 'next' : 'prev';
+  const from = globalId();
+  await activeSlide().out(dir);
+  await step(direction);
+  // Asked again rather than reused: entering or leaving fullscreen across the
+  // await would leave the first answer painting a detached overlay.
+  // `globalId` moving is what separates a new ayah from another part of the
+  // same one, which is the only thing the translation's fade turns on.
+  activeSlide().enter(dir, globalId() !== from);
+}
+
+/**
  * Moving forward credits the verse you are leaving. Going back never credits,
  * and a verse already banked today cannot be banked twice -- that dedupe lives
  * in the reducer.
@@ -105,8 +155,6 @@ async function goToSurah(n: number, ayahIndex = 0): Promise<void> {
  * screen the reader last saw.
  */
 async function step(direction: 1 | -1): Promise<void> {
-  session.start();
-
   const parts = activeView().pageCount();
   if (direction === 1 ? page < parts - 1 : page > 0) {
     page += direction;
@@ -162,8 +210,8 @@ const activeView = (): { pageCount: () => number } => tv ?? view;
 /* -------------------------------------------------------------------- views */
 
 const view = new ReaderView({
-  onPrev: () => void step(-1),
-  onNext: () => void step(1),
+  onPrev: () => void move(-1),
+  onNext: () => void move(1),
   // A typed jump stays inside the surah on screen, and never credits a verse:
   // only moving forward through the reader banks anything.
   onJumpToAyah: (ayah) => void goToSurah(surah.meta.n, ayah - 1),
@@ -259,11 +307,18 @@ async function enterFullscreen(): Promise<void> {
   view.clearCelebration();
 
   tv = new TvView({
-    onPrev: () => void step(-1),
-    onNext: () => void step(1),
+    onPrev: () => void move(-1),
+    onNext: () => void move(1),
     onExit: () => void exitFullscreen(),
   });
   document.body.append(tv.root);
+  // The overlay keeps its own tap halves, which already send the left of the
+  // screen forward -- the RTL direction every gesture in this app now speaks --
+  // so only swipe and pinch are added here.
+  if (touchCapable()) {
+    detachTvGestures = attachGestures(
+      { surface: tv.root, frame: tv.frame, taps: () => false }, gestureCallbacks);
+  }
   tv.paintVerse(surah, index, page, store.get().settings);
   tv.paintState(store.snapshot());
   // The overlay's frame is not the reader's, so the ayah may split differently
@@ -283,6 +338,9 @@ async function enterFullscreen(): Promise<void> {
 async function exitFullscreen(): Promise<void> {
   clearTimeout(autoTimer);
   autoTimer = undefined;
+  detachTvGestures?.();
+  detachTvGestures = null;
+  tv?.slide.settle();
   tv?.teardown();
   tv?.root.remove();
   tv = null;
@@ -297,8 +355,8 @@ function scheduleAuto(): void {
   if (tv === null || chosen === null) return;
   autoTimer = setTimeout(() => {
     // Re-arm even if the step was a no-op -- at the last ayah of the Qur'an
-    // step() returns early, and chaining off it alone would stop the loop.
-    void step(1).finally(scheduleAuto);
+    // move() returns early, and chaining off it alone would stop the loop.
+    void move(1).finally(scheduleAuto);
   }, chosen * 1000) as unknown as number;
 }
 
@@ -333,6 +391,12 @@ document.addEventListener('fullscreenchange', () => {
  */
 function paintVerse(moved = true): void {
   const settings = store.get().settings;
+  // Every caller that passes `false` is a repaint the reader did not step for
+  // -- a resize, the real faces landing, a size or translation change. None of
+  // them is a move, so any slide still in the air belongs to a step that is now
+  // being painted over, and it is put back rather than left half-travelled.
+  // Both views, because the one not on screen can be holding a stale transform.
+  if (!moved) { view.slide.settle(); tv?.slide.settle(); }
   // Both views are painted, but they split independently: the overlay's frame
   // and type are not the reader's, so the same ayah can be two parts in one and
   // four in the other. `page` is then clamped to whichever is on screen, which
@@ -431,17 +495,50 @@ function paintClock(): void {
 
 }
 
+/* ----------------------------------------------------------------- gestures */
+
+/**
+ * What a touch is allowed to do, wherever it lands. The same object serves the
+ * reader and the fullscreen overlay -- only the surface it is attached to and
+ * whether that surface wants tap zones differ.
+ */
+const gestureCallbacks = {
+  onMove: (m: 'next' | 'prev' | 'none') => { if (m !== 'none') void move(m === 'next' ? 1 : -1); },
+  onDrag: (px: number | null) => activeSlide().offset(px),
+  onSize: (px: number) => setArabicSize(px),
+  // The store debounces settings writes by 250ms, which is right while the
+  // fingers are still moving and wrong the moment they stop -- a reader who
+  // sets a size and immediately backgrounds the app should not lose it.
+  onSizeSettled: () => store.flush(),
+  arabicSize: () => store.get().settings.arabicSize,
+  // The same guard the keyboard uses: with a panel or the drawer open, the
+  // reader is not reading, and a swipe over a scrim must not turn the ayah
+  // underneath it.
+  blocked: () => isPanelOpen() || isDrawerOpen(),
+};
+
+/** Torn down with the overlay, so a removed node is never left listening. */
+let detachTvGestures: (() => void) | null = null;
+
 /* ----------------------------------------------------------------- keyboard */
 
 const ARABIC_SIZE_STEP = 6;
 
-function nudgeArabicSize(delta: number): void {
+/**
+ * The one way the Arabic size ever changes. `[` and `]` nudge it by a step, a
+ * pinch lands on an arbitrary value, and both clamp through the same core
+ * helper -- so the two controls cannot drift into disagreeing about the range.
+ */
+function setArabicSize(px: number): void {
   const current = store.get().settings.arabicSize;
-  const next = Math.min(200, Math.max(24, current + delta));
+  const next = clampSize(px);
   if (next === current) return;
   store.dispatch({ t: 'patchSettings', patch: { arabicSize: next } });
   paintVerse(false);
 }
+
+const nudgeArabicSize = (delta: number): void =>
+  setArabicSize(store.get().settings.arabicSize + delta);
 
 function toggleTranslation(): void {
   const on = !store.get().settings.showTranslation;
@@ -467,8 +564,8 @@ window.addEventListener('keydown', (e) => {
   }
 
   switch (e.key) {
-    case 'ArrowRight': e.preventDefault(); void step(1); break;
-    case 'ArrowLeft': e.preventDefault(); void step(-1); break;
+    case 'ArrowRight': e.preventDefault(); void move(1); break;
+    case 'ArrowLeft': e.preventDefault(); void move(-1); break;
     case '[': e.preventDefault(); nudgeArabicSize(-ARABIC_SIZE_STEP); break;
     case ']': e.preventDefault(); nudgeArabicSize(ARABIC_SIZE_STEP); break;
     case 't': case 'T': e.preventDefault(); toggleTranslation(); break;
@@ -488,9 +585,26 @@ async function boot(): Promise<void> {
   applyAppearance(store.get().settings);
   app.append(view.root);
 
+  // Stamped before the first paint, so a phone never shows a frame of the
+  // desktop layout on its way to the touch one. It is the same `pointer:
+  // coarse` question the gestures are attached behind, asked once and written
+  // down, so the CSS and the listeners can never disagree about the answer.
+  const touch = touchCapable();
+  if (touch) document.documentElement.dataset.touch = 'on';
+
   meta = await loadMeta();
   const pos = store.get().position;
   await goToSurah(pos.surah, pos.ayah - 1);
+
+  // Attached only now. A gesture is a step, and a step reads `meta` and the
+  // surah on screen -- neither of which exists until the two awaits above have
+  // returned. Nothing here runs on a desktop; tap zones are asked for again at
+  // every tap, because the width they turn on changes when a phone is rotated.
+  if (touch) {
+    attachGestures(
+      { surface: view.surface, frame: view.frame, taps: tapZonesWanted },
+      gestureCallbacks);
+  }
 
   const snap = store.snapshot();
   view.noticeDismissed = store.get().noticeDismissed;
@@ -515,7 +629,7 @@ if (import.meta.env.DEV) {
   // Stripped from production builds by the bundler's dead-code elimination.
   (window as unknown as Record<string, unknown>).__oneAyah = {
     store, session,
-    step: (d: 1 | -1) => step(d),
+    step: (d: 1 | -1) => move(d),
     // What one animation frame does. Exposed so the frame path can be driven
     // in environments where requestAnimationFrame is throttled to zero.
     paintClock: () => paintClock(),

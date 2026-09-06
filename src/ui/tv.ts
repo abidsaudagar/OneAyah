@@ -14,6 +14,7 @@ import { celebrationCard, type CelebrationCard } from './celebration.ts';
 import { confetti } from './confetti.ts';
 import { clockText, el, tapOnly } from './dom.ts';
 import { Pager } from './pages.ts';
+import { Slide } from './slide.ts';
 import type { Surah } from '../data/quran.ts';
 
 export interface TvCallbacks {
@@ -24,6 +25,13 @@ export interface TvCallbacks {
 
 export class TvView {
   readonly root: HTMLElement;
+  /**
+   * The frame a pinch and the ayah's own motion belong to. The overlay keeps
+   * its existing tap halves -- they already point the RTL way this app's touch
+   * gestures now speak -- so only swipe and pinch are added here.
+   */
+  readonly frame: HTMLElement;
+  readonly slide: Slide;
   private readonly elClock: HTMLElement;
   private readonly elBar: HTMLElement;
   private readonly elCount: HTMLElement;
@@ -81,8 +89,17 @@ export class TvView {
       this.elPart,
       el('div', { class: 'tv__foot' },
         this.elAuto,
-        el('span', { text: '← → TO MOVE THROUGH THE AYAT · [ ] FOR TEXT SIZE · T FOR TRANSLATION · ESC TO EXIT' })),
+        // Same reasoning as the reader's hint row: the keys mean nothing to a
+        // thumb and the gestures mean nothing to a keyboard, so both are built
+        // and CSS shows whichever the device can actually do.
+        el('span', { class: 'tv__hint tv__hint--keys',
+          text: '← → TO MOVE THROUGH THE AYAT · [ ] FOR TEXT SIZE · T FOR TRANSLATION · ESC TO EXIT' }),
+        el('span', { class: 'tv__hint tv__hint--touch',
+          text: 'SWIPE OR TAP A SIDE TO MOVE · PINCH FOR TEXT SIZE' })),
     );
+
+    this.frame = this.elStack;
+    this.slide = new Slide(this.elAyah, this.elTrans);
   }
 
   /**

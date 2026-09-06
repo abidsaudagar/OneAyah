@@ -26,9 +26,9 @@ Zero runtime dependencies. Measured gzipped, which is what GitHub Pages serves.
 
 | | gzip |
 |---|---|
-| App shell (JS + CSS + HTML) | 25.9 KB |
+| App shell (JS + CSS + HTML) | 28.9 KB |
 | Fonts (Al Qalam, Amiri Quran, IBM Plex Mono) | 137 KB |
-| First visit — shell + fonts + Al-Fātiḥah | **166 KB** |
+| First visit — shell + fonts + Al-Fātiḥah | **169 KB** |
 | Complete Qur'an, all three texts, cached for offline | 973 KB |
 | Everything, once fully offline | 1.10 MB |
 
@@ -52,6 +52,41 @@ never leaves Uthmani pay for it too.
 
 The translation is off by default. These hints sit under the ayah until you
 have twenty verses behind you, then they stop earning their place.
+
+## Touch
+
+| | |
+|---|---|
+| swipe right | next ayah |
+| swipe left | previous ayah |
+| tap the left of the ayah | next ayah |
+| tap the right of the ayah | previous ayah |
+| pinch | Arabic text size |
+| press and hold the ayah number | jump to an ayah |
+
+Forward is leftward, because the book is. A rightward swipe pushes the ayah out
+to the right and brings the next one in from the left, which is what a mushaf
+does under a thumb, and the left of the frame is therefore the side that moves
+you on. The middle sixth of the frame is dead, so a resting thumb costs nothing
+and a pinch has somewhere safe to start.
+
+The two nav controls follow the same rule and swap sides on a touch screen --
+but they stop being arrows there and say `NEXT` and `BACK` instead. Mirroring
+the arrows as well as their positions, which is what a browser does to its own
+back and forward buttons in an RTL locale, produces a row that is pixel-identical
+to the desktop one while meaning the reverse of it; a reader arrives having been
+taught by every other app on their phone that a left arrow goes back.
+
+The arrow keys are not mirrored. `ArrowRight` is still next, and it agrees with
+the animation anyway, since next sends the ayah rightward either way.
+
+Swipe and pinch go to any coarse pointer. Tap zones are held back to phones and
+tablets: a tap forward credits the verse it leaves, permanently, and on a
+touchscreen laptop a stray click in the reading area would do it silently.
+
+The decision itself -- was that a swipe, a tap, a pinch, or nothing -- is a pure
+function in `src/core/gesture.ts` with its own tests. `src/ui/gestures.ts` holds
+only the listeners.
 
 ## How the scoring works
 

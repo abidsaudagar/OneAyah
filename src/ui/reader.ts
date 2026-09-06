@@ -15,10 +15,16 @@ import { celebrationCard, type CelebrationCard } from './celebration.ts';
 import { confetti } from './confetti.ts';
 import { clockText, el, num, tapOnly, type Child } from './dom.ts';
 import { Pager } from './pages.ts';
+import { Slide } from './slide.ts';
 import type { Surah } from '../data/quran.ts';
 
 /** What the line under the reader is currently asking for, if anything. */
 type BannerMode = 'degraded' | 'feedback' | 'notice';
+
+/** How long a finger rests on the ayah number before it becomes a jump field. */
+const LONG_PRESS_MS = 500;
+/** And how far it may drift while it does, before it is a swipe instead. */
+const LONG_PRESS_SLOP_PX = 10;
 
 export interface ReaderCallbacks {
   onPrev: () => void;
@@ -72,6 +78,12 @@ const icon = (paths: string, label: string, onClick: () => void) => el('button',
 
 export class ReaderView {
   readonly root: HTMLElement;
+  /** Where a swipe is read: the whole reading column. Set in the constructor. */
+  readonly surface: HTMLElement;
+  /** What the tap zones divide, and the only place native zoom is refused. */
+  readonly frame: HTMLElement;
+  /** The motion a step makes here; owned by the view that holds the elements. */
+  readonly slide: Slide;
 
   // Held references for the hot path.
   private readonly elAyah: HTMLElement;
@@ -190,33 +202,64 @@ export class ReaderView {
     this.elAyahBox = el('div', { class: 'ayah' }, this.elAyah);
     this.elTrans = el('p', { class: 'translation__text' });
     this.elLocator = this.buildLocator(cb);
+    // Both sets are built and one is shown, chosen in CSS by `pointer: coarse`
+    // rather than here: the keyboard hints are useless on a phone and the
+    // gesture hints are unreachable without a touchscreen, and neither the
+    // reader nor the window can change which of those is true mid-session.
+    const hintSet = (cls: string, pairs: readonly (readonly [string, string])[]) =>
+      el('div', { class: `hints__set ${cls}` },
+        ...pairs.map(([k, what]) => el('span', {}, el('kbd', { text: k }), what)));
     this.elHints = el('div', { class: 'hints' },
-      ...([['← →', 'ayah'], ['[ ]', 'text size'], ['T', 'translation'], ['F', 'fullscreen']] as const)
-        .map(([k, what]) => el('span', {}, el('kbd', { text: k }), what)));
+      hintSet('hints__set--keys',
+        [['← →', 'ayah'], ['[ ]', 'text size'], ['T', 'translation'], ['F', 'fullscreen']]),
+      // The order a thumb will discover them in: the one that moves you, the
+      // one that moves you without moving, then the one you go looking for.
+      hintSet('hints__set--touch',
+        [['SWIPE', 'ayah'], ['TAP', 'left or right'], ['PINCH', 'text size']]));
 
+    // Each control carries both of its faces and CSS shows one, because forward
+    // is not the same direction on the two inputs. On a keyboard, forward is
+    // `ArrowRight` and the button that matches it points right. On a touch
+    // screen the app is a mushaf: forward is leftward through the book, and the
+    // left of the frame is `next`, so the forward control belongs on the left.
+    //
+    // On touch it stops being an arrow. Swapping the pair's places AND their
+    // glyphs -- which is what a browser does to its own back and forward
+    // buttons in an RTL locale -- produces a row that is PIXEL-IDENTICAL to the
+    // desktop one while meaning the reverse of it: a left-pointing arrow on the
+    // left that goes forward. Nothing on screen could tell the two apart, and a
+    // reader arrives with every other app on their phone having taught them
+    // that a left arrow goes back. So the touch face is the word instead. It
+    // cannot be misread, and it names the side the tap zone behind it is on.
+    //
+    // `aria-label` never swaps: the button's MEANING is fixed, only its face.
+    const glyphs = (keyboard: string, touch: string) => [
+      el('span', { class: 'nav__glyph nav__glyph--keys', text: keyboard }),
+      el('span', { class: 'nav__glyph nav__glyph--touch', text: touch }),
+    ];
     this.elPrev = el('button', {
-      class: 'nav__arrow', text: '←',
+      class: 'nav__arrow',
       attrs: { type: 'button', 'aria-label': 'Previous ayah' },
       on: { click: cb.onPrev, keydown: tapOnly },
-    });
+    }, ...glyphs('←', 'BACK'));
     this.elNext = el('button', {
-      class: 'nav__arrow', text: '→',
+      class: 'nav__arrow',
       attrs: { type: 'button', 'aria-label': 'Next ayah' },
       on: { click: cb.onNext, keydown: tapOnly },
-    });
+    }, ...glyphs('→', 'NEXT'));
 
     this.elBanner = el('div', { class: 'banner', attrs: { hidden: true } });
 
-    this.root = el('div', { class: 'shell' },
-      header,
-      el('main', { class: 'reader' },
-        this.elAyahBox,
-        el('div', { class: 'translation' }, this.elTrans, this.elLocator),
-        el('div', { class: 'nav' }, this.elPrev, this.elNext),
-        this.elHints,
-      ),
-      this.elBanner,
+    this.surface = el('main', { class: 'reader' },
+      this.elAyahBox,
+      el('div', { class: 'translation' }, this.elTrans, this.elLocator),
+      el('div', { class: 'nav' }, this.elPrev, this.elNext),
+      this.elHints,
     );
+    this.frame = this.elAyahBox;
+    this.slide = new Slide(this.elAyah, this.elTrans);
+
+    this.root = el('div', { class: 'shell' }, header, this.surface, this.elBanner);
   }
 
   /**
@@ -247,11 +290,41 @@ export class ReaderView {
     // is a replaced box and cannot be made to sit on the same baseline as the
     // text around it, so opening one nudged the whole line. This way the box
     // never changes at all.
+    // A long press is the touch half of the double-click below. Both are
+    // deliberately awkward for the same reason: this line sits under the ayah
+    // the reader is looking at, and a single tap on it must never turn it into
+    // an input. Double-tap could not be that gesture -- it is the browser's own
+    // zoom, and on a page that has just taken pinch away from the reader,
+    // taking double-tap too would leave them with no way to magnify anything.
+    let pressTimer: number | undefined;
+    let pressFrom: { x: number; y: number } | null = null;
+    const endPress = () => { clearTimeout(pressTimer); pressTimer = undefined; pressFrom = null; };
+
     this.elLocAyah = el('span', {
       class: 'locator__ayah',
-      attrs: { title: 'Double-click to jump to an ayah' },
+      attrs: { title: 'Double-click, or press and hold, to jump to an ayah' },
       on: {
         dblclick: () => this.beginAyahEdit(),
+        touchstart: (e: TouchEvent) => {
+          const t = e.touches[0];
+          if (!t || e.touches.length !== 1) { endPress(); return; }
+          pressFrom = { x: t.clientX, y: t.clientY };
+          pressTimer = setTimeout(() => {
+            pressTimer = undefined;
+            this.beginAyahEdit();
+          }, LONG_PRESS_MS) as unknown as number;
+        },
+        // A finger that wandered was on its way somewhere else -- a swipe that
+        // happened to start on the number, most often.
+        touchmove: (e: TouchEvent) => {
+          const t = e.touches[0];
+          if (!t || pressFrom === null) return;
+          if (Math.hypot(t.clientX - pressFrom.x, t.clientY - pressFrom.y) > LONG_PRESS_SLOP_PX) {
+            endPress();
+          }
+        },
+        touchend: endPress,
+        touchcancel: endPress,
         // Only digits, however they arrive -- typed, pasted or dropped. A mixed
         // paste is stripped down rather than rejected whole, and three digits
         // is the ceiling: no surah runs past 286 ayat.
@@ -523,11 +596,6 @@ export class ReaderView {
   clearCelebration(): void {
     this.card?.dismiss();
     this.card = null;
-  }
-
-  flashVerseChange(): void {
-    this.elAyahBox.classList.add('ayah--changing');
-    setTimeout(() => this.elAyahBox.classList.remove('ayah--changing'), 60);
   }
 }
 
