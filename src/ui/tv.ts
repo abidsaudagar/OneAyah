@@ -4,15 +4,17 @@
  * The design's screen 1b is manual-only, which leaves the case it was drawn for
  * -- reading from across a room, or by someone who cannot sit at a desk --
  * unserved, since nobody can reach the arrow keys from a sofa. So auto-advance
- * is offered as an opt-in. The ayah still SITS STILL: this holds each verse for
- * a fixed dwell and then moves on. It is not scrolling text.
+ * is offered as an opt-in, here and in the reader both. The ayah still SITS
+ * STILL: it holds a screenful for as long as those words need (core/dwell.ts)
+ * and then turns. It is not scrolling text.
  */
 import type { Celebration } from '../core/celebrate.ts';
 import { celebrationCopy } from '../core/celebrate.ts';
 import type { Snapshot } from '../core/state.ts';
+import { AutoLine } from './autoline.ts';
 import { celebrationCard, type CelebrationCard } from './celebration.ts';
 import { confetti } from './confetti.ts';
-import { clockText, el, tapOnly } from './dom.ts';
+import { clockText, el, speedText, tapOnly } from './dom.ts';
 import { Pager } from './pages.ts';
 import { Slide } from './slide.ts';
 import type { Surah } from '../data/quran.ts';
@@ -45,6 +47,10 @@ export class TvView {
   /** An ayah too long for the frame, split into the parts it is read in. */
   private readonly pager = new Pager();
   private pages: string[] = [''];
+  /** Which part is on screen, so auto-advance can time the words in front of it. */
+  private shownPage = 0;
+  /** The bar that fills while auto-advance holds this screenful. */
+  private readonly autoLine = new AutoLine('autoline autoline--tv');
   private readonly elGoal: HTMLElement;
   private card: CelebrationCard | null = null;
   private stopConfetti: (() => void) | null = null;
@@ -94,9 +100,12 @@ export class TvView {
         // thumb and the gestures mean nothing to a keyboard, so both are built
         // and CSS shows whichever the device can actually do.
         el('span', { class: 'tv__hint tv__hint--keys',
-          text: '← → TO MOVE THROUGH THE AYAT · [ ] FOR TEXT SIZE · T FOR TRANSLATION · ESC TO EXIT' }),
+          text: '← → TO MOVE · P TO PLAY OR PAUSE · [ ] FOR TEXT SIZE · T FOR TRANSLATION · ESC TO EXIT' }),
         el('span', { class: 'tv__hint tv__hint--touch',
           text: 'SWIPE OR TAP A SIDE TO MOVE · PINCH FOR TEXT SIZE' })),
+      // Along the very bottom edge, under everything: it is the one thing here
+      // that has to stay readable from the far side of a room.
+      this.autoLine.root,
     );
 
     this.frame = this.elStack;
@@ -120,6 +129,7 @@ export class TvView {
     this.elTrans.hidden = !settings.showTranslation;
     this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', this.availableHeight());
     const shown = Math.min(Math.max(0, page), this.pages.length - 1);
+    this.shownPage = shown;
     this.elAyah.textContent = this.pages[shown] ?? '';
     this.elPart.textContent = `PART ${shown + 1} OF ${this.pages.length}`;
     this.elPart.hidden = this.pages.length < 2;
@@ -128,6 +138,26 @@ export class TvView {
   /** How many parts the ayah on screen is being read in; 1 when it fits. */
   pageCount(): number {
     return this.pages.length;
+  }
+
+  /** The Arabic actually on screen -- the current part, not the whole ayah. */
+  pageText(): string {
+    return this.pages[this.shownPage] ?? '';
+  }
+
+  /** The whole ayah's English, whether or not it is currently shown. */
+  translationText(): string {
+    return this.elTrans.textContent ?? '';
+  }
+
+  /** Fills the hairline over `ms`, or clears it when auto-advance is not running. */
+  autoProgress(ms: number | null): void {
+    this.autoLine.run(ms);
+  }
+
+  /** The auto-advance readout in the footer. */
+  paintAuto(playing: boolean, speed: number): void {
+    this.elAuto.textContent = playing ? `▸ AUTO · ${speedText(speed)}` : '';
   }
 
   /**
@@ -173,8 +203,8 @@ export class TvView {
     const goal = snap.effectiveRung;
     this.elCount.textContent = `${snap.versesToday}/${goal}`;
     this.elBar.style.width = `${Math.min(100, (snap.versesToday / goal) * 100)}%`;
-    this.elAuto.textContent = snap.settings.autoAdvanceSec === null
-      ? '' : `▸ AUTO · ${snap.settings.autoAdvanceSec}s`;
+    // The auto readout is NOT painted here. Whether it is running is not in the
+    // settings and so is not in the snapshot -- see paintAuto.
     // T reaches the overlay through here as well as through paintVerse, so
     // toggling it -- from the key or from the settings panel -- never waits on
     // the next ayah to take effect, size included.
@@ -202,6 +232,7 @@ export class TvView {
 
   /** Called on the way out, so nothing is left painting over a removed overlay. */
   teardown(): void {
+    this.autoLine.run(null);
     this.card?.dismiss();
     this.card = null;
     this.stopConfetti?.();

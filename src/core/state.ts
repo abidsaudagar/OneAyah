@@ -4,8 +4,8 @@
  * every action carries the instant it happened at.
  */
 import {
-  DAY_ROLLOVER_HOUR, FREE_MAX_RUNG, type DayKey, type DayRecord, type PersistedState,
-  type Position, type Rung, type Settings, type StreakInfo,
+  DAY_ROLLOVER_HOUR, DEFAULT_AUTO_SPEED, FREE_MAX_RUNG, type DayKey, type DayRecord,
+  type PersistedState, type Position, type Rung, type Settings, type StreakInfo,
 } from '../types.ts';
 import { Coverage } from './coverage.ts';
 import { dayKeyOf, type OffsetFn } from './day.ts';
@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sessionLen: 70,
   theme: 'paper',
   accent: 'blue',
-  autoAdvanceSec: null,
+  autoAdvanceSpeed: DEFAULT_AUTO_SPEED,
 };
 
 export function initialState(nowMs: number, offset?: OffsetFn): PersistedState {

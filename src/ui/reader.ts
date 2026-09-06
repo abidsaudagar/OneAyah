@@ -13,9 +13,10 @@ import type { Theme } from '../types.ts';
 import { SIZE_MIN } from '../core/gesture.ts';
 import { fittedSize } from '../core/paginate.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
+import { AutoLine } from './autoline.ts';
 import { celebrationCard, type CelebrationCard } from './celebration.ts';
 import { confetti } from './confetti.ts';
-import { clockText, el, num, tapOnly, type Child } from './dom.ts';
+import { clockText, el, num, speedText, tapOnly, type Child } from './dom.ts';
 import { Pager } from './pages.ts';
 import { Slide } from './slide.ts';
 import type { Surah } from '../data/quran.ts';
@@ -105,6 +106,11 @@ export class ReaderView {
   /** An ayah too long for the frame, split into the parts it is read in. */
   private readonly pager = new Pager();
   private pages: string[] = [''];
+  /** Which part is on screen, so auto-advance can time the words in front of it. */
+  private shownPage = 0;
+  /** The bar that fills while auto-advance holds this screenful. */
+  private readonly autoLine = new AutoLine('autoline');
+  private readonly elAuto: HTMLElement;
   private elHints!: HTMLElement;
   private readonly elGoalCount: HTMLElement;
   private readonly elGoalBar: HTMLElement;
@@ -213,7 +219,8 @@ export class ReaderView {
         ...pairs.map(([k, what]) => el('span', {}, el('kbd', { text: k }), what)));
     this.elHints = el('div', { class: 'hints' },
       hintSet('hints__set--keys',
-        [['← →', 'ayah'], ['[ ]', 'text size'], ['T', 'translation'], ['F', 'fullscreen']]),
+        [['← →', 'ayah'], ['P', 'auto-advance'], ['[ ]', 'text size'],
+          ['T', 'translation'], ['F', 'fullscreen']]),
       // The order a thumb will discover them in: the one that moves you, the
       // one that moves you without moving, then the one you go looking for.
       hintSet('hints__set--touch',
@@ -247,11 +254,19 @@ export class ReaderView {
 
     this.elBanner = el('div', { class: 'banner', attrs: { hidden: true } });
 
+    // Empty, and therefore invisible, until auto-advance is actually running.
+    // A permanent "AUTO: OFF" would be one more thing on a screen whose whole
+    // argument is that there is nothing on it but the ayah.
+    this.elAuto = el('span', { class: 'nav__auto', attrs: { role: 'status' } });
+
     this.surface = el('main', { class: 'reader' },
       this.elAyahBox,
       el('div', { class: 'translation' }, this.elTrans, this.elLocator),
-      el('div', { class: 'nav' }, this.elPrev, this.elNext),
+      el('div', { class: 'nav' }, this.elPrev, this.elNext, this.elAuto),
       this.elHints,
+      // Last in the column, so it sits on the bottom edge of the reading area
+      // whether or not the hints above it have retired.
+      this.autoLine.root,
     );
     this.frame = this.elAyahBox;
     this.slide = new Slide(this.elAyah, this.elTrans);
@@ -469,6 +484,7 @@ export class ReaderView {
     // does not need the distinction the cap above turns on.
     this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', available ?? 0);
     const shown = Math.min(Math.max(0, page), this.pages.length - 1);
+    this.shownPage = shown;
     this.elAyah.textContent = this.pages[shown] ?? '';
     this.elLocPart.textContent = ` · part ${shown + 1} of ${this.pages.length}`;
     this.elLocPart.hidden = this.pages.length < 2;
@@ -491,6 +507,26 @@ export class ReaderView {
   /** How many parts the ayah on screen is being read in; 1 when it fits. */
   pageCount(): number {
     return this.pages.length;
+  }
+
+  /** The Arabic actually on screen -- the current part, not the whole ayah. */
+  pageText(): string {
+    return this.pages[this.shownPage] ?? '';
+  }
+
+  /** The whole ayah's English, whether or not it is currently shown. */
+  translationText(): string {
+    return this.elTrans.textContent ?? '';
+  }
+
+  /** Fills the hairline over `ms`, or clears it when auto-advance is not running. */
+  autoProgress(ms: number | null): void {
+    this.autoLine.run(ms);
+  }
+
+  /** The auto-advance readout beside the arrows. */
+  paintAuto(playing: boolean, speed: number): void {
+    this.elAuto.textContent = playing ? `▸ AUTO · ${speedText(speed)}` : '';
   }
 
   /**

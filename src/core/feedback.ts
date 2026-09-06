@@ -70,8 +70,7 @@ export function report(state: PersistedState, snap: Snapshot, ctx: ReportContext
     ['position', `${state.position.surah}:${state.position.ayah}`],
     ['script', `${SCRIPT_OF[s.arabicFont]} · ${s.arabicFont} · ${s.arabicSize}px`],
     ['translation', s.showTranslation ? `on · ${s.translationSize}px` : 'off'],
-    ['session', `${sessionText(s.sessionLen)} · auto-advance ${
-      s.autoAdvanceSec === null ? 'off' : `${s.autoAdvanceSec}s`}`],
+    ['session', `${sessionText(s.sessionLen)} · auto-advance ${s.autoAdvanceSpeed}x`],
     ['theme', `${s.theme} · ${s.accent}`],
     ['screen', ctx.viewport],
     ['browser', ctx.agent],

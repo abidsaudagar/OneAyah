@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { repair } from '../src/store/persist.ts';
 import { DEFAULT_SETTINGS, initialState, reduce } from '../src/core/state.ts';
 import {
-  ACCENTS, ARABIC_FONTS, SESSION_LENGTHS, THEMES,
+  ACCENTS, ARABIC_FONTS, AUTO_SPEEDS, SESSION_LENGTHS, THEMES,
   type PersistedState, type Settings,
 } from '../src/types.ts';
 
@@ -48,14 +48,23 @@ describe('backup and repair', () => {
       ...s,
       settings: {
         ...s.settings, arabicSize: 9999, translationSize: -5,
-        sessionLen: 3600, arabicFont: 'comic-sans', autoAdvanceSec: 500,
+        sessionLen: 3600, arabicFont: 'comic-sans', autoAdvanceSpeed: 500,
       },
     }, NOW)!;
     assert.equal(out.settings.arabicSize, 200);
     assert.equal(out.settings.translationSize, 12);
     assert.equal(out.settings.sessionLen, 70);
     assert.equal(out.settings.arabicFont, 'al-qalam-indopak');
-    assert.equal(out.settings.autoAdvanceSec, 30);
+    // Snapped to the top of the ladder, not clamped to some other number: a
+    // speed that is not a rung would leave `+` and `-` unable to reach it.
+    assert.equal(out.settings.autoAdvanceSpeed, 2.5);
+  });
+
+  it('drops the retired fixed-seconds auto-advance rather than carrying it forever', () => {
+    const s = withReading();
+    const out = repair({ ...s, settings: { ...s.settings, autoAdvanceSec: 12 } }, NOW)!;
+    assert.ok(!('autoAdvanceSec' in out.settings));
+    assert.equal(out.settings.autoAdvanceSpeed, 1);
   });
 
   it('hands a reader of the retired Noto face to Amiri, not to the default', () => {
@@ -110,7 +119,7 @@ describe('backup and repair', () => {
         sessionLen: 140,
         theme: 'dark',
         accent: 'green',
-        autoAdvanceSec: 9,
+        autoAdvanceSpeed: 1.4,
       };
       // Every field must actually differ, or the test would pass on a build
       // that silently reset the settings to their defaults.
@@ -141,8 +150,9 @@ describe('backup and repair', () => {
       for (const translationSize of [12, 18, 40]) {
         assert.equal(round({ translationSize }).translationSize, translationSize);
       }
-      for (const autoAdvanceSec of [null, 5, 12, 30]) {
-        assert.equal(round({ autoAdvanceSec }).autoAdvanceSec, autoAdvanceSec);
+      // Every rung of the dial, since the panel's steppers can reach all of them.
+      for (const autoAdvanceSpeed of AUTO_SPEEDS) {
+        assert.equal(round({ autoAdvanceSpeed }).autoAdvanceSpeed, autoAdvanceSpeed);
       }
       for (const showTranslation of [true, false]) {
         assert.equal(round({ showTranslation }).showTranslation, showTranslation);

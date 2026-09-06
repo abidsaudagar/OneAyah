@@ -81,3 +81,11 @@ export function clockText(totalSeconds: number): string {
 }
 
 export const num = (n: number): string => n.toLocaleString('en-US');
+
+/**
+ * A speed multiplier as the reader sees it: 1.0x, 0.85x, 2.5x. Always at least
+ * one decimal, so the ladder does not read as `1x, 1.2x` with the whole numbers
+ * jumping a character narrower than their neighbours.
+ */
+export const speedText = (n: number): string =>
+  `${Number.isInteger(n * 10) ? n.toFixed(1) : n.toFixed(2)}×`;
