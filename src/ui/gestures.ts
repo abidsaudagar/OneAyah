@@ -56,7 +56,7 @@ export interface GestureCallbacks {
   /** The pinch is over and the size it landed on is final. */
   onSizeSettled: () => void;
   /** A two-finger tap over the frame: turn the translation on or off. */
-  onToggleTranslation: () => void;
+  onCycleTranslation: () => void;
   /** The Arabic size a pinch should scale from. */
   arabicSize: () => number;
   /** True while a panel or the drawer is open, when nothing here applies. */
@@ -209,7 +209,7 @@ export function attachGestures(t: GestureTargets, cb: GestureCallbacks): () => v
         if (pinched) cb.onSize(pendingSize);
       }
       if (wasTap) {
-        if (!cb.blocked()) cb.onToggleTranslation();
+        if (!cb.blocked()) cb.onCycleTranslation();
         return;
       }
       if (pinched) cb.onSizeSettled();

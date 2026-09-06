@@ -8,8 +8,9 @@ import { createStore, quarantine, type Store, type WriteResult } from '../platfo
 import { DEFAULT_SETTINGS } from '../core/state.ts';
 import {
   ACCENTS, ARABIC_FONTS, RETIRED_FONTS, RUNGS, SESSION_LENGTHS, THEMES,
+  TRANSLATION_LANGS,
   type Accent, type ArabicFont, type PersistedState, type Position, type Rung,
-  type Settings, type Theme,
+  type Settings, type Theme, type TranslationLang,
 } from '../types.ts';
 
 export const STORAGE_KEY = 'qread.state.v1';
@@ -50,6 +51,18 @@ export function repair(raw: unknown, nowMs: number): PersistedState | null {
   // keys off, so a junk value there loses the accent with nothing said.
   if (!ACCENTS.includes(s.accent as Accent)) s.accent = DEFAULT_SETTINGS.accent;
   s.showTranslation = s.showTranslation === true;
+  // Absent in every backup written before Urdu existed, and those readers were
+  // all reading English -- which is what the default is, so nothing moves
+  // under them. Junk takes the same path.
+  if (!TRANSLATION_LANGS.includes(s.translationLang as TranslationLang)) {
+    s.translationLang = DEFAULT_SETTINGS.translationLang;
+  }
+  // A backup from before the cycle had a home takes the language it was last
+  // showing, not the default -- that reader had already chosen, and the field
+  // is new, not empty.
+  if (!TRANSLATION_LANGS.includes(s.translationHome as TranslationLang)) {
+    s.translationHome = s.translationLang;
+  }
 
   const days: PersistedState['days'] = {};
   for (const [k, v] of Object.entries(r.days ?? {})) {

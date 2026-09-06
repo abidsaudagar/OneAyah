@@ -30,7 +30,12 @@ import { nextTheme } from './platform/theme.ts';
 import { ReaderView } from './ui/reader.ts';
 import { renderStats } from './ui/stats.ts';
 import { TvView } from './ui/tv.ts';
-import { SCRIPT_OF, type ArabicFont, type ArabicScript, type QuranMeta, type Rung, type Settings } from './types.ts';
+import {
+  SCRIPT_OF,
+  type ArabicFont, type ArabicScript, type QuranMeta, type Rung, type Settings,
+  type TranslationLang,
+} from './types.ts';
+import { cycleTranslation } from './core/translation.ts';
 
 const store = createAppStore();
 const app = qs<HTMLElement>('#app');
@@ -94,13 +99,20 @@ const globalId = () => globalIndex(meta, surah.meta.n, index + 1);
 /** Uthmani or Indo-Pak, decided by the chosen face. */
 const scriptNow = (): ArabicScript => SCRIPT_OF[store.get().settings.arabicFont];
 
+/**
+ * Which translation to fetch alongside it. Read even while the translation is
+ * hidden: `T` should bring it in instantly, not send the reader to the network
+ * for a surah they already have.
+ */
+const langNow = (): TranslationLang => store.get().settings.translationLang;
+
 async function goToSurah(n: number, ayahIndex = 0): Promise<void> {
-  surah = await loadSurah(n, scriptNow());
+  surah = await loadSurah(n, scriptNow(), langNow());
   index = Math.min(Math.max(0, ayahIndex), surah.meta.c - 1);
   page = 0;
   paintVerse();
   store.dispatch({ t: 'setPosition', position: { surah: n, ayah: index + 1 } });
-  prefetchSurah(n + 1, scriptNow());
+  prefetchSurah(n + 1, scriptNow(), langNow());
 }
 
 /**
@@ -197,7 +209,7 @@ async function step(direction: 1 | -1): Promise<void> {
   const next = index + direction;
   if (next < 0) {
     if (surah.meta.n === 1) return;
-    const prev = await loadSurah(surah.meta.n - 1, scriptNow());
+    const prev = await loadSurah(surah.meta.n - 1, scriptNow(), langNow());
     await goToSurah(prev.meta.n, prev.meta.c - 1);
     landOnLastPart();
   } else if (next >= surah.meta.c) {
@@ -209,7 +221,7 @@ async function step(direction: 1 | -1): Promise<void> {
     paintVerse();
     if (direction === -1) landOnLastPart();
     store.dispatch({ t: 'setPosition', position: { surah: surah.meta.n, ayah: index + 1 } });
-    if (index >= surah.meta.c - 5) prefetchSurah(surah.meta.n + 1, scriptNow());
+    if (index >= surah.meta.c - 5) prefetchSurah(surah.meta.n + 1, scriptNow(), langNow());
   }
 }
 
@@ -563,35 +575,60 @@ function paintVerse(moved = true): void {
 
 /** Everything about the settings that the verse itself is painted from. */
 const presentationKey = (s: Settings): string => [
-  s.arabicFont, s.arabicSize, s.translationSize, s.showTranslation,
+  s.arabicFont, s.arabicSize, s.translationSize, s.showTranslation, s.translationLang,
 ].join('|');
 
+/** Bumped by each text load, so a stale one can tell that it has been overtaken. */
+let textLoad = 0;
+
 /**
- * Re-fetches the ayah on screen in the other orthography. If it cannot be had
- * -- offline, before the service worker has cached it -- the font choice is put
- * back rather than rendering Uthmani glyphs in a face cut for Indo-Pak.
+ * Re-fetches the ayah on screen in a different orthography, a different
+ * translation, or both. Those are the only two settings that change which
+ * FILES the ayah is made of, so they are the only two that come through here.
+ *
+ * If the text cannot be had -- offline, before the service worker has cached it
+ * -- both choices are put back to whatever is actually on screen, rather than
+ * rendering Uthmani glyphs in a face cut for Indo-Pak, or leaving the panel
+ * claiming a translation the reader is not being shown. Putting back the one
+ * that did not change is a no-op, so the two cases need no telling apart.
  */
-async function showScript(script: ArabicScript, fallback: ArabicFont): Promise<void> {
+async function showText(
+  script: ArabicScript, lang: TranslationLang, fallbackFont: ArabicFont,
+): Promise<void> {
   // Claim the change before awaiting: every store notification during the fetch
   // comes back through paintState, and a stale key there would start the same
   // load again on each one.
   shownKey = presentationKey(store.get().settings);
+  // And claim the SCREEN, so the last change made is the one that lands on it.
+  // `T` is one key away from another language and a reader can press it faster
+  // than a fetch returns; without this, two loads race and whichever the
+  // network happens to finish last wins -- which may be the one the reader
+  // stepped off. The loser also stops being allowed to revert the settings, or
+  // a slow failure would drag a successful change back with it.
+  const gen = ++textLoad;
   const n = surah.meta.n;
+  const fallbackLang = surah.lang;
 
   let next: Surah;
   try {
-    next = await loadSurah(n, script);
+    next = await loadSurah(n, script, lang);
   } catch {
-    store.dispatch({ t: 'patchSettings', patch: { arabicFont: fallback } });
+    if (gen === textLoad) {
+      store.dispatch({
+        t: 'patchSettings',
+        patch: { arabicFont: fallbackFont, translationLang: fallbackLang },
+      });
+    }
     return;
   }
 
   // The reader can move while this is in flight; landing the old surah on top
-  // of the new one would silently rewind them.
-  if (surah.meta.n !== n) return;
+  // of the new one would silently rewind them. (Moving refetches in whatever
+  // the settings now say, so nothing is lost by dropping this.)
+  if (gen !== textLoad || surah.meta.n !== n) return;
   surah = next;
   paintVerse(false);
-  prefetchSurah(n + 1, script);
+  prefetchSurah(n + 1, script, lang);
 }
 
 function paintState(): void {
@@ -606,8 +643,12 @@ function paintState(): void {
   // A settings change reaches the ayah here, and only here.
   if (presentationKey(snap.settings) !== shownKey) {
     const script = SCRIPT_OF[snap.settings.arabicFont];
-    if (script === surah.script) paintVerse(false);
-    else void showScript(script, shownFont);
+    const lang = snap.settings.translationLang;
+    // A size or an on/off is a repaint of text already in hand. A script or a
+    // language is a different file, and has to be fetched before it can be
+    // painted -- painting first would put the new type over the old words.
+    if (script === surah.script && lang === surah.lang) paintVerse(false);
+    else void showText(script, lang, shownFont);
   }
 
   // The ask is a rule, not a stored flag: three goal-met days and not yet
@@ -666,8 +707,10 @@ const gestureCallbacks = {
   // fingers are still moving and wrong the moment they stop -- a reader who
   // sets a size and immediately backgrounds the app should not lose it.
   onSizeSettled: () => store.flush(),
-  // A two-finger tap over the ayah -- the touch counterpart of pressing T.
-  onToggleTranslation: () => toggleTranslation(),
+  // A two-finger tap over the ayah -- the touch counterpart of pressing T, and
+  // it takes the same step through the same cycle rather than a toggle of its
+  // own, so the two inputs cannot come to mean different things.
+  onCycleTranslation: () => stepTranslation(),
   arabicSize: () => store.get().settings.arabicSize,
   // The same guard the keyboard uses: with a panel or the drawer open, the
   // reader is not reading, and a swipe over a scrim must not turn the ayah
@@ -698,10 +741,20 @@ function setArabicSize(px: number): void {
 const nudgeArabicSize = (delta: number): void =>
   setArabicSize(store.get().settings.arabicSize + delta);
 
-function toggleTranslation(): void {
-  const on = !store.get().settings.showTranslation;
-  store.dispatch({ t: 'patchSettings', patch: { showTranslation: on } });
-  paintVerse(false);
+/**
+ * One step of the translation cycle -- the reader's own language, then the
+ * others, then off. The order and the reasoning live in `cycleTranslation`;
+ * this only hands the result to the store.
+ *
+ * `T` and the two-finger tap both come here, so the key and the gesture cannot
+ * drift into meaning different things.
+ *
+ * No repaint here. Moving to a language whose text is not in hand has to go
+ * through the fetch in `showText`, and paintState is what starts it -- so the
+ * store notification does the painting, once, for both cases.
+ */
+function stepTranslation(): void {
+  store.dispatch({ t: 'patchSettings', patch: cycleTranslation(store.get().settings) });
 }
 
 window.addEventListener('keydown', (e) => {
@@ -726,7 +779,7 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowLeft': e.preventDefault(); void move(-1); break;
     case '[': e.preventDefault(); nudgeArabicSize(-ARABIC_SIZE_STEP); break;
     case ']': e.preventDefault(); nudgeArabicSize(ARABIC_SIZE_STEP); break;
-    case 't': case 'T': e.preventDefault(); toggleTranslation(); break;
+    case 't': case 'T': e.preventDefault(); stepTranslation(); break;
     case 'p': case 'P': e.preventDefault(); toggleAuto(); break;
     case 'f': case 'F':
       if (tv === null) { e.preventDefault(); void enterFullscreen(); }

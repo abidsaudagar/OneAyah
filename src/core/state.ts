@@ -17,6 +17,8 @@ import { recomputeUnlockedMax, selectableRungs } from './unlock.ts';
 export const DEFAULT_SETTINGS: Settings = {
   arabicFont: 'al-qalam-indopak',
   showTranslation: false,
+  translationLang: 'en',
+  translationHome: 'en',
   arabicSize: 128,
   translationSize: 18,
   sessionLen: 70,

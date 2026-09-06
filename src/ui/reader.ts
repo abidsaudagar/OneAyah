@@ -9,10 +9,11 @@ import type { Celebration } from '../core/celebrate.ts';
 import { celebrationCopy, firstVisitChip } from '../core/celebrate.ts';
 import type { Snapshot } from '../core/state.ts';
 import { resolveTheme } from '../platform/theme.ts';
-import type { Theme } from '../types.ts';
+import { TRANSLATIONS, type Settings, type Theme } from '../types.ts';
 import { SIZE_MIN } from '../core/gesture.ts';
 import { fittedSize } from '../core/paginate.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
+import { cycleOrder } from '../core/translation.ts';
 import { AutoLine } from './autoline.ts';
 import { celebrationCard, type CelebrationCard } from './celebration.ts';
 import { confetti } from './confetti.ts';
@@ -112,6 +113,8 @@ export class ReaderView {
   private readonly autoLine = new AutoLine('autoline');
   private readonly elAuto: HTMLElement;
   private elHints!: HTMLElement;
+  /** The T hint's words; rewritten when the reader's own language changes. */
+  private elHintT!: HTMLElement;
   private readonly elGoalCount: HTMLElement;
   private readonly elGoalBar: HTMLElement;
   /** The chip above the goal bar. Says GOAL MET, or the ask on a first visit. */
@@ -214,13 +217,17 @@ export class ReaderView {
     // rather than here: the keyboard hints are useless on a phone and the
     // gesture hints are unreachable without a touchscreen, and neither the
     // reader nor the window can change which of those is true mid-session.
-    const hintSet = (cls: string, pairs: readonly (readonly [string, string])[]) =>
+    const hintSet = (cls: string, pairs: readonly (readonly [string, Child])[]) =>
       el('div', { class: `hints__set ${cls}` },
         ...pairs.map(([k, what]) => el('span', {}, el('kbd', { text: k }), what)));
+    // The T hint names the languages in the order THIS reader's key visits them,
+    // which starts from their own. It is filled in by `paintState`, because the
+    // order is a setting and the constructor has none.
+    this.elHintT = el('span', { class: 'hints__what' });
     this.elHints = el('div', { class: 'hints' },
       hintSet('hints__set--keys',
         [['← →', 'ayah'], ['P', 'auto-advance'], ['[ ]', 'text size'],
-          ['T', 'translation'], ['F', 'fullscreen']]),
+          ['T', this.elHintT], ['F', 'fullscreen']]),
       // The order a thumb will discover them in: the one that moves you, the
       // one that moves you without moving, then the ones you go looking for.
       hintSet('hints__set--touch',
@@ -466,13 +473,13 @@ export class ReaderView {
    */
   paintVerse(surah: Surah, index: number, page: number, settings: Snapshot['settings']): void {
     // The translation is settled BEFORE the split, not after. The ayah frame is
-    // what the rest of the column leaves, and both of these move it: the size
-    // sets how tall the translation box reserves, and hiding it hands that room
-    // back. Split first and the pages would be measured against the frame the
-    // PREVIOUS setting left.
-    this.elTrans.textContent = surah.en[index] ?? '';
-    this.elTrans.hidden = !settings.showTranslation;
-    this.root.style.setProperty('--trans-size', `${settings.translationSize}px`);
+    // what the rest of the column leaves, and all three of these move it: the
+    // size sets how tall the translation box reserves, the language scales that
+    // size, and hiding it hands the room back. Split first and the pages would
+    // be measured against the frame the PREVIOUS setting left.
+    this.elTrans.textContent = surah.trans[index] ?? '';
+    this.paintTranslationType(settings, surah.lang);
+    this.elTrans.hidden = !this.showsTranslation(settings);
 
     this.elAyah.dataset.font = settings.arabicFont;
     // Measured BEFORE the size goes on, and used for both the cap and the
@@ -503,6 +510,30 @@ export class ReaderView {
     this.elPrev.disabled = surah.meta.n === 1 && index === 0 && shown === 0;
     this.elNext.disabled = surah.meta.n === 114 && index === surah.meta.c - 1
       && shown === this.pages.length - 1;
+  }
+
+  /**
+   * The translation's language, as everything that depends on it: the writing
+   * direction, the `lang` tag a screen reader reads it with, the face CSS
+   * picks off `data-lang`, and the size that language's script needs.
+   *
+   * `surah.lang` rather than the setting, because a language change refetches
+   * and the text on screen is whichever one has actually arrived. Painting
+   * Urdu type over English words is a frame nobody should ever see.
+   */
+  private paintTranslationType(settings: Settings, lang: Surah['lang']): void {
+    const t = TRANSLATIONS[lang];
+    this.paintedLang = lang;
+    this.elTrans.dataset.lang = lang;
+    this.elTrans.dir = t.rtl ? 'rtl' : 'ltr';
+    this.elTrans.lang = t.tag;
+    // Two numbers from one setting. `--trans-size` is what the type is set at,
+    // scaled for the script. `--trans-box` is what the box RESERVES, and is
+    // deliberately the unscaled figure: the room the translation takes from the
+    // ayah has to be the same in every language, or switching language would
+    // move the Arabic.
+    this.root.style.setProperty('--trans-size', `${settings.translationSize * t.sizeScale}px`);
+    this.root.style.setProperty('--trans-box', `${settings.translationSize}px`);
   }
 
   /** How many parts the ayah on screen is being read in; 1 when it fits. */
@@ -563,7 +594,9 @@ export class ReaderView {
 
     this.paintTheme(snap.settings.theme);
 
-    this.elTrans.hidden = !snap.settings.showTranslation;
+    this.elTrans.hidden = !this.showsTranslation(snap.settings);
+    this.elHintT.textContent = `${cycleOrder(snap.settings.translationHome)
+      .map((l) => TRANSLATIONS[l].label).join(' · ')} · off`;
     // The hints stop earning their place once the habit is underway.
     this.elHints.hidden = snap.totals.verses >= 20;
 
@@ -597,6 +630,21 @@ export class ReaderView {
     const title = `${face.label} — switch to ${face.next.toLowerCase()}`;
     this.elTheme.title = title;
     this.elTheme.setAttribute('aria-label', title);
+  }
+
+  /** The language of the text currently in `elTrans`; see `showsTranslation`. */
+  private paintedLang: Surah['lang'] = 'en';
+
+  /**
+   * Whether the translation box may be shown right now -- which is not just
+   * whether the reader asked for one. Changing language is a fetch, and until
+   * it lands the words in the box are still the OLD language's. This paint runs
+   * on every store change, so without the second half of this test, pressing T
+   * would flash the language the reader just left before the one they asked for
+   * arrived. Nothing is shown until the two agree.
+   */
+  private showsTranslation(s: Settings): boolean {
+    return s.showTranslation && s.translationLang === this.paintedLang;
   }
 
   noticeDismissed = false;
