@@ -1,13 +1,16 @@
 /**
  * Loading, repair and persistence of the reader's progress.
  */
+import { snapSpeed } from '../core/dwell.ts';
+import { repairPlaces } from '../core/places.ts';
 import { initialState } from '../core/state.ts';
 import { createStore, quarantine, type Store, type WriteResult } from '../platform/storage.ts';
 import { DEFAULT_SETTINGS } from '../core/state.ts';
 import {
-  ARABIC_FONTS, RETIRED_FONTS, RUNGS, SESSION_LENGTHS, THEMES, TRANSLATION_LANGS,
-  type ArabicFont, type PersistedState, type Rung, type Settings, type Theme,
-  type TranslationLang,
+  ACCENTS, ARABIC_FONTS, RETIRED_FONTS, RUNGS, SESSION_LENGTHS, THEMES,
+  TRANSLATION_LANGS,
+  type Accent, type ArabicFont, type PersistedState, type Position, type Rung,
+  type Settings, type Theme, type TranslationLang,
 } from '../types.ts';
 
 export const STORAGE_KEY = 'qread.state.v1';
@@ -35,10 +38,18 @@ export function repair(raw: unknown, nowMs: number): PersistedState | null {
     // anything else -- junk, a typo, a hand-edited backup -- takes the default.
     s.arabicFont = RETIRED_FONTS[s.arabicFont as string] ?? DEFAULT_SETTINGS.arabicFont;
   }
-  if (s.autoAdvanceSec !== null) s.autoAdvanceSec = clamp(Number(s.autoAdvanceSec) || 12, 5, 30);
+  s.autoAdvanceSpeed = snapSpeed(s.autoAdvanceSpeed);
+  // Auto-advance used to be a fixed dwell in seconds, fullscreen only. The
+  // number meant nothing under the length-derived model that replaced it -- 12
+  // seconds is a crawl on a short ayah and a blur on a long one -- so it is
+  // dropped rather than converted, and the reader lands on the default pace.
+  delete (s as { autoAdvanceSec?: unknown }).autoAdvanceSec;
   // An unknown theme would be stamped straight onto data-theme, where it
   // matches no rule and leaves the app on the light palette silently.
   if (!THEMES.includes(s.theme as Theme)) s.theme = DEFAULT_SETTINGS.theme;
+  // Same failure one attribute over: data-accent is what every accented rule
+  // keys off, so a junk value there loses the accent with nothing said.
+  if (!ACCENTS.includes(s.accent as Accent)) s.accent = DEFAULT_SETTINGS.accent;
   s.showTranslation = s.showTranslation === true;
   // Absent in every backup written before Urdu existed, and those readers were
   // all reading English -- which is what the default is, so nothing moves
@@ -74,15 +85,18 @@ export function repair(raw: unknown, nowMs: number): PersistedState | null {
   const goal = RUNGS.includes(r.goal as Rung) ? (r.goal as Rung) : base.goal;
   const unlockedMax = RUNGS.includes(r.unlockedMax as Rung) ? (r.unlockedMax as Rung) : 10;
 
+  const position: Position = {
+    surah: clamp(Math.floor(Number(r.position?.surah) || 1), 1, 114),
+    ayah: Math.max(1, Math.floor(Number(r.position?.ayah) || 1)),
+  };
+
   return {
     version: 1,
     days,
     goal: goal > unlockedMax ? unlockedMax : goal,
     unlockedMax,
-    position: {
-      surah: clamp(Math.floor(Number(r.position?.surah) || 1), 1, 114),
-      ayah: Math.max(1, Math.floor(Number(r.position?.ayah) || 1)),
-    },
+    position,
+    places: repairPlaces(r.places, position),
     // Totals are always rebuilt, never trusted -- a hand-edited backup cannot
     // inject a points total that the day records do not support.
     totals: { points, verses, seconds },

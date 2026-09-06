@@ -4,8 +4,9 @@
  * exact position, which is what a single bookmark would have been for.
  */
 import { Coverage } from '../core/coverage.ts';
+import { placeIn } from '../core/places.ts';
 import { surahStart } from '../data/quran.ts';
-import type { QuranMeta, SurahMeta } from '../types.ts';
+import type { Places, QuranMeta, SurahMeta } from '../types.ts';
 import { el } from './dom.ts';
 
 let open: HTMLElement | null = null;
@@ -24,6 +25,7 @@ export function openDrawer(
   meta: QuranMeta,
   current: number,
   coverageB64: string,
+  places: Places,
   onPick: (surah: number) => void,
 ): void {
   closeDrawer();
@@ -33,9 +35,14 @@ export function openDrawer(
 
   const row = (s: SurahMeta) => {
     const read = cov.countRange(surahStart(meta, s.n), s.c);
+    // The kept place is worth naming: it is the difference between a jump that
+    // restarts the surah and one that hands it back, and the reader cannot
+    // otherwise tell which they are about to get.
+    const at = placeIn(places, s.n);
     const meta2 = s.n === current
       ? `${s.c} VERSES · READING NOW`
-      : read > 0 ? `${s.c} VERSES · ${read} READ` : `${s.c} VERSES`;
+      : at > 1 ? `${s.c} VERSES · RESUMES AT ${at}`
+        : read > 0 ? `${s.c} VERSES · ${read} READ` : `${s.c} VERSES`;
 
     return el('button', {
       class: `surah${s.n === current ? ' surah--current' : ''}`,
@@ -82,7 +89,7 @@ export function openDrawer(
     list,
     el('p', {
       style: 'padding:14px 24px;font:400 11.5px/1.5 var(--font-ui);color:var(--muted);border-top:1px solid var(--border);margin:0',
-      text: 'Jumping surah keeps your place in the old one.',
+      text: 'Jumping surah keeps your place in the old one — come back and you land where you left it.',
     }),
   );
 

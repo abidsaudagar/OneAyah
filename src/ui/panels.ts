@@ -18,7 +18,8 @@ import {
   TRANSLATIONS, UNLOCK_DAYS,
   type Accent, type ArabicFont, type Rung, type SessionLen, type Settings,
 } from '../types.ts';
-import { clockText, el, num } from './dom.ts';
+import { arabicWordsPerMinute, stepSpeed } from '../core/dwell.ts';
+import { clockText, el, num, speedText } from './dom.ts';
 
 export interface PanelHandle { close(): void }
 
@@ -187,14 +188,28 @@ const ACCENTS: { id: Accent; hex: string }[] = [
   { id: 'purple', hex: '#8a5cd6' }, { id: 'black', hex: '#141618' },
 ];
 
+/**
+ * Whether auto-advance is RUNNING is not a setting -- it is what the reader is
+ * doing this minute, and it lives in the composition root next to the timer
+ * that drives it. The panel reaches it through this rather than through
+ * `patch`, and asks for the value with a function rather than taking a copy,
+ * because the panel re-renders by reopening itself with the arguments it was
+ * built from: a captured boolean would be one toggle out of date every time.
+ */
+export interface AutoAdvanceControl {
+  isPlaying(): boolean;
+  setPlaying(on: boolean): void;
+}
+
 export function openSettings(
   settings: Settings,
   patch: (p: Partial<Settings>) => void,
   showAbout: () => void,
   showFeedback: () => void,
+  auto: AutoAdvanceControl,
 ): void {
   openModal((close) => {
-    const rerender = () => { close(); openSettings(settings, patch, showAbout, showFeedback); };
+    const rerender = () => { close(); openSettings(settings, patch, showAbout, showFeedback, auto); };
     const set = (p: Partial<Settings>) => { Object.assign(settings, p); patch(p); rerender(); };
 
     const stepper = (label: string, sub: string, dec: () => void, inc: () => void) =>
@@ -282,22 +297,31 @@ export function openSettings(
         el('span', { class: 'opt__label', text: SESSION_LABELS[len] }),
       ))),
 
-      el('div', { class: 'panel__section', text: 'FULLSCREEN AUTO-ADVANCE' }),
+      el('div', { class: 'panel__section', text: 'AUTO-ADVANCE' }),
       el('div', { class: 'row', style: 'border-top:0;padding-top:0' },
         el('div', {},
-          el('div', { class: 'row__label', text: settings.autoAdvanceSec === null ? 'Off — advance by hand' : `On — ${settings.autoAdvanceSec}s per ayah` }),
-          el('div', { class: 'row__sub', text: 'For reading from across the room' })),
-        el('div', { class: 'stepper' },
+          el('div', { class: 'row__label', text: 'Turn the ayah for me' }),
+          el('div', { class: 'row__sub', text: 'Or press P while reading' })),
+        el('div', { class: 'tabs' },
           el('button', {
-            text: '−',
-            on: { click: () => set({ autoAdvanceSec: settings.autoAdvanceSec === null ? null : settings.autoAdvanceSec <= 5 ? null : settings.autoAdvanceSec - 1 }) },
+            text: 'OFF', attrs: { 'aria-selected': !auto.isPlaying() },
+            on: { click: () => { auto.setPlaying(false); rerender(); } },
           }),
           el('button', {
-            text: '+',
-            on: { click: () => set({ autoAdvanceSec: settings.autoAdvanceSec === null ? 5 : Math.min(30, settings.autoAdvanceSec + 1) }) },
-          }),
-        ),
-      ),
+            text: 'ON', attrs: { 'aria-selected': auto.isPlaying() },
+            on: { click: () => { auto.setPlaying(true); rerender(); } },
+          }))),
+      stepper('Reading speed',
+        `${speedText(settings.autoAdvanceSpeed)} · about ${
+          arabicWordsPerMinute(settings.autoAdvanceSpeed)} words a minute`,
+        () => set({ autoAdvanceSpeed: stepSpeed(settings.autoAdvanceSpeed, -1) }),
+        () => set({ autoAdvanceSpeed: stepSpeed(settings.autoAdvanceSpeed, 1) })),
+      el('p', {
+        class: 'panel__note', style: 'margin:2px 0 0',
+        text: 'Every ayah is held for as long as its own words need, so a long verse '
+          + 'gets a long hold and two words get two seconds. This dial scales that, and '
+          + 'the line along the bottom of the screen shows how much of the hold is left.',
+      }),
 
       el('div', { class: 'panel__section', text: 'APPEARANCE' }),
       el('div', { class: 'row', style: 'border-top:0;padding-top:0' },

@@ -53,13 +53,17 @@ someone who does.
 | | |
 |---|---|
 | `←` `→` | previous / next ayah |
+| `P` | start or pause auto-advance |
 | `[` `]` | Arabic text size |
 | `T` | your translation, then the other, then off |
 | `F` | fullscreen |
 | `Esc` | leave fullscreen |
 
 The translation is off by default, and `T` is a cycle rather than a toggle, so
-both translations are reachable from the keyboard without opening a panel.
+both translations are reachable from the keyboard without opening a panel. A
+two-finger tap over the ayah is the touch counterpart and takes the same step
+through the same cycle -- one function serves both, so the key and the gesture
+cannot drift into meaning different things.
 
 The cycle starts from YOUR language -- the one chosen in settings -- and comes
 home to it:
@@ -98,32 +102,69 @@ is what it is worth on a 1000px window. It used to be a fraction of the ARABIC
 instead, which made entering fullscreen jump an 18px translation to nearly 48px
 and made `[` and `]` resize the translation too.
 
+## Auto-advance
+
+`P` hands the page turns to the app, so a phone propped on a shelf or a laptop
+at the far end of a table can be read without reaching it. It works in the
+reader and in fullscreen alike -- having to press `F` first would put the one
+gesture such a reader cannot make in front of the one thing they need. A hairline
+along the bottom edge fills as the hold runs down, so a turn is never a surprise.
+
+Each screenful is held for as long as its own words need. The time is built from
+the words on screen and the letters in them -- `مِن` and `وَٱلْمُسْتَغْفِرِينَ`
+are one word each and nothing like the same amount of reading -- plus the English
+when the translation is showing, and the marks over the letters are not counted,
+so the same verse takes the same time in either orthography. At the default pace
+the basmala is held five seconds and Al-Fātiḥah's last ayah eleven. A long ayah
+is still read in parts, and each part earns its own hold.
+
+Settings has the dial: ten rungs from `0.5×` to `2.5×`, labelled in Arabic words
+a minute so the number means something. Whether it is RUNNING is not a setting
+and is never persisted -- every reload starts paused, because an app that began
+turning pages by itself the moment a tab opened would be wrong in the way an
+autoplaying video is.
+
+It pauses itself for a hidden tab, and holds its place rather than turning the
+page behind an open panel or the surah drawer. It stops at 114:6, and nowhere
+else: a surah ending is not a reason to make someone reach for the keyboard they
+were trying to avoid. Turns credit verses exactly as reading by hand does, and
+count as activity for the session clock -- otherwise `TIME READ` would freeze a
+minute in while verses went on banking, and the two halves of the same session
+would disagree about whether anyone was there.
+
+The arithmetic is a pure function in `src/core/dwell.ts` with its own tests;
+`src/main.ts` holds only the timer and the guards.
+
 ## Touch
 
 | | |
 |---|---|
 | swipe right | next ayah |
 | swipe left | previous ayah |
-| tap the left of the ayah | next ayah |
-| tap the right of the ayah | previous ayah |
+| tap the right of the ayah | next ayah |
+| tap the left of the ayah | previous ayah |
 | pinch | Arabic text size |
+| two-finger tap | the same translation cycle `T` walks |
 | press and hold the ayah number | jump to an ayah |
 
-Forward is leftward, because the book is. A rightward swipe pushes the ayah out
-to the right and brings the next one in from the left, which is what a mushaf
-does under a thumb, and the left of the frame is therefore the side that moves
-you on. The middle sixth of the frame is dead, so a resting thumb costs nothing
-and a pinch has somewhere safe to start.
+Forward is rightward, on every input that has a side to it: the right half of
+the frame, the right nav button, `ArrowRight`, and a rightward flick. The middle
+sixth of the frame is dead, so a resting thumb costs nothing and a pinch has
+somewhere safe to start.
 
-The two nav controls follow the same rule and swap sides on a touch screen --
-but they stop being arrows there and say `NEXT` and `BACK` instead. Mirroring
-the arrows as well as their positions, which is what a browser does to its own
-back and forward buttons in an RTL locale, produces a row that is pixel-identical
-to the desktop one while meaning the reverse of it; a reader arrives having been
-taught by every other app on their phone that a left arrow goes back.
+The book turns the other way, and the tap zones once followed the book rather
+than the phone. A tap zone has no page edge to give the game away -- the only
+thing a reader has to go on is the side, and every other app on their phone has
+already taught them which side is forward -- so the sides follow the phone.
 
-The arrow keys are not mirrored. `ArrowRight` is still next, and it agrees with
-the animation anyway, since next sends the ayah rightward either way.
+The nav controls keep those sides on a touch screen, `BACK` left and `NEXT`
+right, over the zones that mean the same. They say the words rather than drawing
+arrows: there is no key to point at, and a word names the half of the frame
+behind it in a way an arrowhead does not.
+
+The one place the book still shows is the animation. Next sends the ayah out to
+the right and brings the new one in from the left, which is what a mushaf does
+under a thumb, and it is 34px rather than a page width.
 
 Swipe and pinch go to any coarse pointer. Tap zones are held back to phones and
 tablets: a tap forward credits the verse it leaves, permanently, and on a
@@ -132,6 +173,9 @@ touchscreen laptop a stray click in the reading area would do it silently.
 The decision itself -- was that a swipe, a tap, a pinch, or nothing -- is a pure
 function in `src/core/gesture.ts` with its own tests. `src/ui/gestures.ts` holds
 only the listeners.
+
+There is no gesture for auto-advance, and there should not be: a thumb that can
+reach the screen does not need it. Settings turns it on and off instead.
 
 ## How the scoring works
 

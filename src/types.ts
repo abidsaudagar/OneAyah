@@ -48,6 +48,21 @@ export const SESSION_LABELS: Readonly<Record<SessionLen, string>> = {
 /** Countdown and time-read stop accruing after this long with no input. */
 export const IDLE_TIMEOUT_MS = 60_000;
 
+/* ---------- auto-advance ---------- */
+
+/**
+ * The speeds the auto-advance dial offers, as multipliers on the dwell each
+ * screenful earns from its own length (see core/dwell.ts).
+ *
+ * A ladder rather than a free number, and a coarse one: every `+` has to be a
+ * change the reader can actually feel, or they press it four times and conclude
+ * the control does nothing. Roughly 20% a rung, which is about the smallest
+ * step in pace anyone notices.
+ */
+export const AUTO_SPEEDS: readonly number[] = [0.5, 0.6, 0.7, 0.85, 1, 1.2, 1.4, 1.7, 2, 2.5] as const;
+
+export const DEFAULT_AUTO_SPEED = 1;
+
 /** The day flips at 03:00 local, so late-night reading credits to the day before. */
 export const DAY_ROLLOVER_HOUR = 3;
 
@@ -134,6 +149,9 @@ export const CYCLE_THEMES = ['light', 'dark', 'paper'] as const;
 export const THEMES: readonly Theme[] = [...CYCLE_THEMES, 'system'];
 export type Accent = 'blue' | 'green' | 'purple' | 'black';
 
+/** In the order the settings panel offers them; the default leads. */
+export const ACCENTS: readonly Accent[] = ['blue', 'green', 'purple', 'black'] as const;
+
 export interface Settings {
   arabicFont: ArabicFont;
   /**
@@ -157,8 +175,17 @@ export interface Settings {
   sessionLen: SessionLen;
   theme: Theme;
   accent: Accent;
-  /** Fullscreen auto-advance dwell in seconds; null = manual only. */
-  autoAdvanceSec: number | null;
+  /**
+   * How fast auto-advance reads, as a multiplier on the dwell each screenful
+   * earns from its own length. One of AUTO_SPEEDS.
+   *
+   * Whether auto-advance is RUNNING is deliberately not here. That is not a
+   * preference, it is what the reader is doing this minute, and an app that
+   * began turning pages by itself the moment a tab opened -- before anyone had
+   * touched anything -- would be wrong in the same way an autoplaying video is.
+   * It starts paused, every time, and `P` is how it starts.
+   */
+  autoAdvanceSpeed: number;
 }
 
 /* ---------- persisted state ---------- */
@@ -196,6 +223,16 @@ export interface Position {
   ayah: number;
 }
 
+/**
+ * The ayah last stood on in each surah, keyed by surah number.
+ *
+ * `position` answers "where was I?" across a reload; this answers the smaller
+ * question the drawer asks -- "where was I in THAT one?" -- so jumping to a
+ * surah you have read before returns you to it rather than to its first ayah.
+ * Sparse, and bounded at 114 entries by construction.
+ */
+export type Places = Record<number, number>;
+
 export interface PersistedState {
   version: 1;
   days: Record<DayKey, DayRecord>;
@@ -203,6 +240,8 @@ export interface PersistedState {
   /** Highest rung the reader has earned the right to pick. */
   unlockedMax: Rung;
   position: Position;
+  /** Per-surah bookmarks; see `Places`. Always holds `position`'s own surah. */
+  places: Places;
   totals: { points: number; verses: number; seconds: number };
   settings: Settings;
   /**

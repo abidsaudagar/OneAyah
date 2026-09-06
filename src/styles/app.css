@@ -330,6 +330,7 @@ button {
 }
 
 .nav {
+  position: relative;
   display: flex; align-items: center; justify-content: center; gap: 22px;
   padding: 18px 26px 24px;
 }
@@ -341,6 +342,18 @@ button {
 .nav__arrow:hover { color: var(--ink); background: var(--subtle); }
 .nav__arrow[disabled] { opacity: 0.3; cursor: default; }
 .nav__arrow[disabled]:hover { color: var(--hairline); background: none; }
+/* The auto-advance readout, beside the arrows it stands in for. Empty and
+   therefore invisible whenever auto-advance is not running -- there is no
+   "AUTO: OFF" state, because a screen whose whole argument is that it holds
+   nothing but the ayah cannot afford a permanent label for a thing that is
+   not happening. `position: absolute` so turning it on does not shove the
+   arrows off centre. */
+.nav__auto {
+  position: absolute; right: 26px;
+  font: 500 10.5px/1 var(--font-mono); letter-spacing: 0.08em;
+  color: var(--accent);
+  white-space: nowrap;
+}
 .nav__hint {
   font: 400 10.5px/1 var(--font-mono);
   letter-spacing: 0.08em;
@@ -369,6 +382,30 @@ button {
 .hints__set--touch { display: none; }
 .nav__glyph--touch { display: none; }
 .tv__hint--touch { display: none; }
+
+/* The auto-advance hairline. Two pixels of accent along the bottom edge of the
+   reading area, filling as the dwell runs down.
+
+   It fills from the RIGHT, because the text does: the bar reaches the end of
+   the line at the same moment the reader's eye does. The scale is animated
+   rather than the width, so the whole thing is one composited transform and
+   costs nothing per frame -- and `scaleX(0)` is the resting state, so a
+   stopped line is a line of no width rather than one frozen part-way.
+
+   Deliberately outside the reduced-motion block below. This is not decoration;
+   it is the only readout of how long is left before the page turns, and a
+   reader who asked for less motion did not ask to be kept in the dark. */
+.autoline {
+  flex: none;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: right center;
+  will-change: transform;
+}
+.autoline--tv {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 3px;
+}
 
 /* -------------------------------------------------------------------- banner */
 
@@ -740,8 +777,8 @@ a.btn--primary { color: var(--surface); }
 }
 /* Big invisible tap targets, so a propped-up tablet works without a keyboard. */
 .tv__tap { position: absolute; top: 0; bottom: 0; width: 30%; }
-.tv__tap--prev { right: 0; }
-.tv__tap--next { left: 0; }
+.tv__tap--prev { left: 0; }
+.tv__tap--next { right: 0; }
 
 /* ------------------------------------------------------------------ responsive */
 
@@ -804,7 +841,19 @@ a.btn--primary { color: var(--surface); }
      Five here, and the ayah still keeps the larger share of the screen. */
   .translation { height: min(calc(7.75 * var(--trans-box, 18px) + 58px), 32vh); padding: 16px 20px 8px; }
   .nav { gap: 14px; }
-  .nav__hint { display: none; }
+  /* The auto-advance readout, beside the arrows it stands in for. Empty and
+   therefore invisible whenever auto-advance is not running -- there is no
+   "AUTO: OFF" state, because a screen whose whole argument is that it holds
+   nothing but the ayah cannot afford a permanent label for a thing that is
+   not happening. `position: absolute` so turning it on does not shove the
+   arrows off centre. */
+.nav__auto {
+  position: absolute; right: 26px;
+  font: 500 10.5px/1 var(--font-mono); letter-spacing: 0.08em;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.nav__hint { display: none; }
   .stats { padding: 20px 16px; }
   /* The title and the three-way range toggle do not both fit on 343px, and
      `space-between` with no wrap pushed the toggle off the panel's edge. */
@@ -831,13 +880,12 @@ a.btn--primary { color: var(--surface); }
 :root[data-touch] .tv__hint--keys { display: none; }
 :root[data-touch] .tv__hint--touch { display: inline; }
 
-/* Forward is leftward through the book here, so the pair swaps sides AND
-   faces: `next` moves to the left of the row and shows a left-pointing arrow,
-   `prev` to the right showing a right-pointing one. Reversing the flex row is
-   what moves them; the glyph swap is in the markup, one span per face. The DOM
-   order, and therefore the tab order and what a screen reader announces, is
-   unchanged -- previous is still read first, and both keep their own labels. */
-:root[data-touch] .nav { flex-direction: row-reverse; }
+/* The pair keeps its sides on touch -- BACK left, NEXT right, over the tap
+   zones that mean the same -- and only changes face. The arrows go because
+   they are redundant next to a zone the reader is about to learn by tapping
+   it, and because a word says which side it names; the swap is in the markup,
+   one span per face, so the DOM order and what a screen reader announces are
+   the same on both. */
 :root[data-touch] .nav__glyph--keys { display: none; }
 :root[data-touch] .nav__glyph--touch { display: inline; }
 
@@ -865,6 +913,15 @@ a.btn--primary { color: var(--surface); }
 :root[data-touch] .ayah,
 :root[data-touch] .tv__stack { touch-action: pan-y; }
 
+/* The browser paints its own box over whatever it decided was tapped -- a hard
+   blue rectangle on the ayah frame, drawn to the element's bounds and ignoring
+   its corners, and it lands on every tap because the frame carries the touch
+   listeners a swipe is read from. There is nothing to feed back: a tap turns
+   the page, and the page turning IS the feedback. Set on the root, where it
+   inherits, so the halves of the frame, the translation and the locator are
+   all quiet; the controls below get a press state of their own instead. */
+:root[data-touch] { -webkit-tap-highlight-color: transparent; }
+
 /* A long press on Arabic text raises the selection handles and the callout
    menu, which is a fight with every swipe that starts on the ayah. The English
    below stays selectable: it is the part anyone would want to copy. */
@@ -882,6 +939,15 @@ a.btn--primary { color: var(--surface); }
   .nav__arrow:hover { color: var(--hairline); background: none; }
   .goal-btn:hover { opacity: 1; }
   .locator__surah:hover, .locator__ayah:hover { color: var(--muted); }
+
+  /* What hover said on a desktop, said by the press instead: held down it
+     answers, lifted it lets go. This is what the native highlight was doing
+     for the buttons before it was turned off -- only in the app's own colours
+     and clipped to the radius each control already has. */
+  .icon-btn:active { opacity: 1; background: var(--hover); }
+  .nav__arrow:not([disabled]):active { color: var(--ink); background: var(--subtle); }
+  .goal-btn:active { opacity: 0.7; }
+  .locator__surah:active { color: var(--ink); }
 }
 
 /* --------------------------------------------------------------- landscape */
@@ -908,10 +974,23 @@ a.btn--primary { color: var(--surface); }
   :root[data-touch] .metric__sub { display: none; }
   :root[data-touch] .bar { margin-top: 5px; }
   :root[data-touch] .ayah { padding: 12px 20px; }
+  /* `--trans-box`, not `--trans-size`, for the reason the desktop rule gives:
+     the reserved height is the unscaled setting, so Urdu being set larger and
+     looser opens the type without opening the band. It matters most here --
+     this is the window where the ayah frame is whatever is left over, and
+     where the size is capped to what that frame can hold. */
   :root[data-touch] .translation {
-    height: min(calc(4.2 * var(--trans-size, 18px) + 34px), 38vh);
+    height: min(calc(4.2 * var(--trans-box, 18px) + 34px), 38vh);
     padding: 10px 20px 6px;
   }
+  /* Restating the collapse, because the rule above outranks the one that says
+     it: `:root[data-touch] .translation` and `.translation:has(...)` weigh the
+     same, and this block is further down the file, so a landscape phone with
+     the translation OFF was reserving four lines of height for nothing. On a
+     390px-tall window that is a quarter of the screen, taken out of the one
+     band that gives it up -- the ayah frame, which is whatever the column
+     leaves. Same guard, said again where it has the weight to hold. */
+  :root[data-touch] .translation:has(> .translation__text[hidden]) { height: auto; }
   :root[data-touch] .locator { margin-top: 8px; }
   :root[data-touch] .nav { padding: 6px 20px 8px; gap: 8px; }
   :root[data-touch] .hints { padding: 0 20px 10px; gap: 4px 14px; }

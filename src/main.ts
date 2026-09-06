@@ -10,7 +10,9 @@ import { createAppStore } from './app/store.ts';
 import { Session } from './app/session.ts';
 import type { Range } from './core/analytics.ts';
 import { celebrationFor } from './core/celebrate.ts';
+import { dwellMs } from './core/dwell.ts';
 import { report, shouldAsk } from './core/feedback.ts';
+import { placeIn } from './core/places.ts';
 import { pointsPerVerse } from './core/scoring.ts';
 import { BUILD, FEEDBACK_FORM_URL } from './config.ts';
 import { download, exportBlob, parseBackup, pickFile } from './store/backup.ts';
@@ -60,6 +62,11 @@ let shownKey = '';
 let shownFont: ArabicFont = store.get().settings.arabicFont;
 
 let tv: TvView | null = null;
+/**
+ * Whether auto-advance is running. Not persisted, and deliberately so -- see
+ * the note on `autoAdvanceSpeed` in types.ts. Every reload starts paused.
+ */
+let autoPlaying = false;
 let autoTimer: number | undefined;
 /** Set while the stats panel is open, so live updates reach it. */
 let statsHost: HTMLElement | null = null;
@@ -155,6 +162,20 @@ async function move(direction: 1 | -1): Promise<void> {
   activeSlide().enter(dir, globalId() !== from);
 }
 
+/** The Arabic and the English the reader is looking at, and what they earn. */
+function autoDwellMs(): number {
+  const v = activeView();
+  return dwellMs({
+    arabic: v.pageText(),
+    // Only on the first part. The translation is the meaning of the WHOLE
+    // ayah and is held still while the parts turn under it, so it is read on
+    // arrival; paying for it again on part four would strand the reader in
+    // front of English they finished three screens ago.
+    translation: page === 0 && store.get().settings.showTranslation ? v.translationText() : '',
+    speed: store.get().settings.autoAdvanceSpeed,
+  });
+}
+
 /**
  * Moving forward credits the verse you are leaving. Going back never credits,
  * and a verse already banked today cannot be banked twice -- that dedupe lives
@@ -216,8 +237,17 @@ function landOnLastPart(): void {
   paintVerse();
 }
 
-/** Whichever view the reader is actually looking at owns the split. */
-const activeView = (): { pageCount: () => number } => tv ?? view;
+/**
+ * Whichever view the reader is actually looking at owns the split -- and so
+ * owns the only honest answer to what is on screen right now, which is what
+ * auto-advance has to time.
+ */
+interface PagedView {
+  pageCount(): number;
+  pageText(): string;
+  translationText(): string;
+}
+const activeView = (): PagedView => tv ?? view;
 
 /* -------------------------------------------------------------------- views */
 
@@ -233,12 +263,21 @@ const view = new ReaderView({
   },
   onOpenSettings: () => openSettings(
     { ...store.get().settings },
-    (patch) => store.dispatch({ t: 'patchSettings', patch }),
+    (patch) => {
+      store.dispatch({ t: 'patchSettings', patch });
+      // A new speed re-times the ayah already on screen rather than waiting for
+      // the next one, so the reader can feel what they just chose.
+      if (patch.autoAdvanceSpeed !== undefined) armAuto();
+    },
     openAbout,
     openFeedback,
+    { isPlaying: () => autoPlaying, setPlaying: setAutoPlaying },
   ),
-  onOpenDrawer: () => openDrawer(meta, surah.meta.n, store.get().coverage,
-    (n) => void goToSurah(n, 0)),
+  // A surah you have read before resumes where you left it; one you have never
+  // opened starts at its first ayah. The drawer has always said as much in its
+  // footer -- this is the line that makes it true.
+  onOpenDrawer: () => openDrawer(meta, surah.meta.n, store.get().coverage, store.get().places,
+    (n) => void goToSurah(n, placeIn(store.get().places, n) - 1)),
   onOpenFullscreen: () => void enterFullscreen(),
   onOpenBackup: () => openBackup(),
   onOpenStats: () => openStatsPanel(paintStats),
@@ -324,20 +363,24 @@ async function enterFullscreen(): Promise<void> {
     onExit: () => void exitFullscreen(),
   });
   document.body.append(tv.root);
-  // The overlay keeps its own tap halves, which already send the left of the
-  // screen forward -- the RTL direction every gesture in this app now speaks --
-  // so only swipe and pinch are added here.
+  // The overlay keeps its own tap halves, which already send the right of the
+  // screen forward, on the same sides as the reader's, so only swipe and pinch
+  // are added here.
   if (touchCapable()) {
     detachTvGestures = attachGestures(
       { surface: tv.root, frame: tv.frame, taps: () => false }, gestureCallbacks);
   }
   tv.paintVerse(surah, index, page, store.get().settings);
   tv.paintState(store.snapshot());
+  paintAuto();
   // The overlay's frame is not the reader's, so the ayah may split differently
   // in it. Painting again with the clamped part keeps a reader who was on part
   // 3 of 4 from landing past the end of a two-part split.
   paintVerse(false);
-  scheduleAuto();
+  // The overlay's frame is not the reader's, so the same ayah can be a
+  // different number of parts in it -- and a different part is a different
+  // dwell. Re-armed rather than carried across.
+  armAuto();
 
   try {
     // Must be called synchronously enough to still count as a user gesture.
@@ -348,8 +391,6 @@ async function enterFullscreen(): Promise<void> {
 }
 
 async function exitFullscreen(): Promise<void> {
-  clearTimeout(autoTimer);
-  autoTimer = undefined;
   detachTvGestures?.();
   detachTvGestures = null;
   tv?.slide.settle();
@@ -357,20 +398,88 @@ async function exitFullscreen(): Promise<void> {
   tv?.root.remove();
   tv = null;
   paintVerse(false);
+  // Back in the reader's frame, which splits differently: same reasoning as
+  // the way in. Auto-advance keeps running -- leaving fullscreen is not a
+  // request to stop reading.
+  paintAuto();
+  armAuto();
   if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch { /* ignore */ } }
 }
 
-/** Holds each ayah for the chosen dwell, then moves on. */
-function scheduleAuto(): void {
+/* -------------------------------------------------------------- auto-advance */
+
+/**
+ * Holds the screenful in front of the reader for as long as its own words need,
+ * then turns it. The dwell is core/dwell.ts's answer; everything here is the
+ * timer, the guards, and the line that shows how much of it is left.
+ *
+ * The whole feature exists for a reader who cannot reach the screen -- a phone
+ * propped on a shelf, a laptop at the far end of a table. So it runs in the
+ * reader as well as in fullscreen: having to press F first would put the one
+ * gesture they cannot make in front of the one thing they need.
+ *
+ * There is one timer, re-armed from exactly one place, and every step through
+ * the Qur'an -- by key, by tap, by swipe, or by this timer -- lands in
+ * `paintVerse`, which re-arms it. So the ayah you have just arrived at always
+ * gets the whole of its own time, and a reader who swipes ahead early is never
+ * left on a dwell measured for the verse they have already left.
+ */
+
+/** With a panel or the drawer over the ayah, the reader is not reading it. */
+const autoBlocked = (): boolean => isPanelOpen() || isDrawerOpen();
+
+function armAuto(): void {
   clearTimeout(autoTimer);
-  const chosen = store.get().settings.autoAdvanceSec;
-  if (tv === null || chosen === null) return;
+  autoTimer = undefined;
+  // A hidden tab is nobody reading. Timers there are throttled rather than
+  // stopped, so without this a backgrounded tab would quietly bank a surah.
+  if (!autoPlaying || document.hidden) { paintAutoProgress(null); return; }
+
+  const ms = autoDwellMs();
+  paintAutoProgress(ms);
   autoTimer = setTimeout(() => {
-    // Re-arm even if the step was a no-op -- at the last ayah of the Qur'an
-    // move() returns early, and chaining off it alone would stop the loop.
-    void move(1).finally(scheduleAuto);
-  }, chosen * 1000) as unknown as number;
+    // Started over rather than fired late: closing a panel should hand back a
+    // whole ayah's worth of time, not turn the page the instant it shuts.
+    if (autoBlocked()) { armAuto(); return; }
+    // 114:6 is the end of the book, and there is nowhere to advance to. Stop,
+    // rather than re-arming forever against a step that cannot happen.
+    if (!canStep(1)) { setAutoPlaying(false); return; }
+    // An auto turn IS the reader reading -- at the pace they themselves set --
+    // so it counts as activity. Without this the idle timeout would freeze
+    // TIME READ after a minute while verses went on crediting, and the two
+    // halves of the same session would disagree about whether anyone was there.
+    session.activity.poke();
+    // A failed surah fetch would otherwise leave the loop dead with the line
+    // stuck full and no way to tell why; stopping says so.
+    void move(1).catch(() => setAutoPlaying(false));
+  }, ms) as unknown as number;
 }
+
+function setAutoPlaying(on: boolean): void {
+  if (autoPlaying === on) return;
+  autoPlaying = on;
+  paintAuto();
+  armAuto();
+}
+
+const toggleAuto = (): void => setAutoPlaying(!autoPlaying);
+
+/** Only the view actually on screen animates; the other is cleared. */
+function paintAutoProgress(ms: number | null): void {
+  view.autoProgress(tv === null ? ms : null);
+  tv?.autoProgress(ms);
+}
+
+function paintAuto(): void {
+  const speed = store.get().settings.autoAdvanceSpeed;
+  view.paintAuto(autoPlaying, speed);
+  tv?.paintAuto(autoPlaying, speed);
+}
+
+// Backgrounding the tab suspends the dwell; coming back starts the ayah on
+// screen over, which is the right amount of time for someone who has just
+// looked at it again.
+document.addEventListener('visibilitychange', () => armAuto());
 
 // The Arabic faces load after the first paint, and a split measured against a
 // fallback face is measured against the wrong metrics -- the parts come out the
@@ -387,6 +496,32 @@ document.fonts?.ready.then(() => paintVerse(false)).catch(() => {});
 // re-arm the auto-advance dwell.
 window.addEventListener('resize', () => paintVerse(false));
 
+/** The frame height the ayah on screen was last fitted and split against. */
+let fittedFrameH = -1;
+
+/**
+ * The window is not the only thing that moves that frame. The frame is what
+ * the column LEAVES, so every other band moves it: the banner arriving or
+ * being dismissed, the hint row retiring at twenty verses, and the first
+ * paintState of the boot, which runs after the first verse is already on
+ * screen. Each one was leaving the ayah fitted to a frame it is no longer in,
+ * and on a landscape phone -- where the whole frame is a fifth of the window --
+ * a band appearing is most of the room the verse had.
+ *
+ * Watching the frame itself catches all of them, the window included, and says
+ * nothing about which band moved. It cannot feed itself: the frame is `flex: 1`
+ * in a column whose every other band is sized from the settings, so neither the
+ * size this repaints at nor the words it puts there has a vote in the height it
+ * is answering. The height is compared anyway, because an observer that fires
+ * on a fraction of a pixel should not cost a repaint.
+ */
+new ResizeObserver(() => {
+  const h = Math.round(view.frame.clientHeight);
+  if (h === fittedFrameH) return;
+  fittedFrameH = h;
+  paintVerse(false);
+}).observe(view.frame);
+
 // Browsers swallow Escape during native fullscreen, so the exit signal is the
 // fullscreenchange event, never a key handler.
 document.addEventListener('fullscreenchange', () => {
@@ -402,6 +537,18 @@ document.addEventListener('fullscreenchange', () => {
  * toggling, so the timer is left to run.
  */
 function paintVerse(moved = true): void {
+  // Nothing can be painted before boot has fetched the first surah, and three
+  // things here fire on their own schedule rather than on the reader's: the
+  // frame observer's first delivery, the Arabic faces landing, and a window
+  // resized while the fetch is still in flight. Any of them can arrive first,
+  // and each would paint an ayah that does not exist yet.
+  //
+  // Returning is the whole fix -- there is nothing to catch up on. `goToSurah`
+  // paints the moment the surah lands, and the frame observer has already
+  // recorded the height it fired for, so the verse arrives fitted to the frame
+  // it is actually in.
+  if (surah === undefined) return;
+
   const settings = store.get().settings;
   // Every caller that passes `false` is a repaint the reader did not step for
   // -- a resize, the real faces landing, a size or translation change. None of
@@ -418,7 +565,12 @@ function paintVerse(moved = true): void {
   page = Math.min(page, activeView().pageCount() - 1);
   shownKey = presentationKey(settings);
   shownFont = settings.arabicFont;
-  if (tv && moved) scheduleAuto();
+  // The one place the dwell is re-armed, and it sits here because this is the
+  // one place every step through the Qur'an ends up. `moved` is false for the
+  // repaints the reader did not step for -- a resize, the real faces landing, a
+  // size or translation change -- and re-arming there would let someone hold an
+  // ayah on screen indefinitely by tapping T.
+  if (moved) armAuto();
 }
 
 /** Everything about the settings that the verse itself is painted from. */
@@ -504,6 +656,10 @@ function paintState(): void {
   view.feedbackAsk = shouldAsk(store.get().days, store.get().feedbackDismissed);
   view.paintState(snap, store.degraded);
   tv?.paintState(snap);
+  // Cheap, and it is what keeps the readout honest when the speed is changed
+  // from the panel -- the chip names the pace, which lives in the settings,
+  // while the running flag does not.
+  paintAuto();
   if (statsHost !== null) paintStats(statsHost);
 
   // Only on the crossing, only upward, and only when a VERSE carried it over.
@@ -551,6 +707,10 @@ const gestureCallbacks = {
   // fingers are still moving and wrong the moment they stop -- a reader who
   // sets a size and immediately backgrounds the app should not lose it.
   onSizeSettled: () => store.flush(),
+  // A two-finger tap over the ayah -- the touch counterpart of pressing T, and
+  // it takes the same step through the same cycle rather than a toggle of its
+  // own, so the two inputs cannot come to mean different things.
+  onCycleTranslation: () => stepTranslation(),
   arabicSize: () => store.get().settings.arabicSize,
   // The same guard the keyboard uses: with a panel or the drawer open, the
   // reader is not reading, and a swipe over a scrim must not turn the ayah
@@ -582,14 +742,18 @@ const nudgeArabicSize = (delta: number): void =>
   setArabicSize(store.get().settings.arabicSize + delta);
 
 /**
- * `T`. English, then Urdu, then off -- the order and the reasoning live in
- * `cycleTranslation`; this only hands the result to the store.
+ * One step of the translation cycle -- the reader's own language, then the
+ * others, then off. The order and the reasoning live in `cycleTranslation`;
+ * this only hands the result to the store.
+ *
+ * `T` and the two-finger tap both come here, so the key and the gesture cannot
+ * drift into meaning different things.
  *
  * No repaint here. Moving to a language whose text is not in hand has to go
  * through the fetch in `showText`, and paintState is what starts it -- so the
  * store notification does the painting, once, for both cases.
  */
-function cycleTranslationKey(): void {
+function stepTranslation(): void {
   store.dispatch({ t: 'patchSettings', patch: cycleTranslation(store.get().settings) });
 }
 
@@ -615,7 +779,8 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowLeft': e.preventDefault(); void move(-1); break;
     case '[': e.preventDefault(); nudgeArabicSize(-ARABIC_SIZE_STEP); break;
     case ']': e.preventDefault(); nudgeArabicSize(ARABIC_SIZE_STEP); break;
-    case 't': case 'T': e.preventDefault(); cycleTranslationKey(); break;
+    case 't': case 'T': e.preventDefault(); stepTranslation(); break;
+    case 'p': case 'P': e.preventDefault(); toggleAuto(); break;
     case 'f': case 'F':
       if (tv === null) { e.preventDefault(); void enterFullscreen(); }
       break;
@@ -677,12 +842,15 @@ if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__oneAyah = {
     store, session,
     step: (d: 1 | -1) => move(d),
+    toggleAuto,
     // What one animation frame does. Exposed so the frame path can be driven
     // in environments where requestAnimationFrame is throttled to zero.
     paintClock: () => paintClock(),
     state: () => ({
       active: session.activity.active,
       running: session.isRunning,
+      autoPlaying,
+      dwellMs: autoDwellMs(),
       activeMs: session.activeMs(),
       remainingMs: session.remainingMs(),
       index, surah: surah?.meta.n,

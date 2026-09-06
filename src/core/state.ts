@@ -4,11 +4,12 @@
  * every action carries the instant it happened at.
  */
 import {
-  DAY_ROLLOVER_HOUR, FREE_MAX_RUNG, type DayKey, type DayRecord, type PersistedState,
-  type Position, type Rung, type Settings, type StreakInfo,
+  DAY_ROLLOVER_HOUR, DEFAULT_AUTO_SPEED, FREE_MAX_RUNG, type DayKey, type DayRecord,
+  type PersistedState, type Position, type Rung, type Settings, type StreakInfo,
 } from '../types.ts';
 import { Coverage } from './coverage.ts';
 import { dayKeyOf, type OffsetFn } from './day.ts';
+import { rememberPlace } from './places.ts';
 import { multiplier, scoreDay } from './scoring.ts';
 import { currentStreak, daysRead, daysSinceStart, longestStreak, type DayMap } from './streak.ts';
 import { recomputeUnlockedMax, selectableRungs } from './unlock.ts';
@@ -23,7 +24,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sessionLen: 70,
   theme: 'paper',
   accent: 'blue',
-  autoAdvanceSec: null,
+  autoAdvanceSpeed: DEFAULT_AUTO_SPEED,
 };
 
 export function initialState(nowMs: number, offset?: OffsetFn): PersistedState {
@@ -34,6 +35,7 @@ export function initialState(nowMs: number, offset?: OffsetFn): PersistedState {
     goal: 5,
     unlockedMax: FREE_MAX_RUNG,
     position: { surah: 1, ayah: 1 },
+    places: { 1: 1 },
     totals: { points: 0, verses: 0, seconds: 0 },
     settings: { ...DEFAULT_SETTINGS },
     credited: { day, ids: [] },
@@ -99,7 +101,14 @@ export function reduce(state: PersistedState, a: Action, offset?: OffsetFn): Per
   if (a.t === 'setPosition') {
     const p = state.position;
     if (p.surah === a.position.surah && p.ayah === a.position.ayah) return state;
-    return { ...state, position: { ...a.position } };
+    // Standing somewhere is what writes the bookmark. There is no separate
+    // "remember this" action, so no path through the app can move the reader
+    // without the surah they are leaving keeping its place.
+    return {
+      ...state,
+      position: { ...a.position },
+      places: rememberPlace(state.places, a.position),
+    };
   }
   if (a.t === 'patchSettings') {
     return { ...state, settings: { ...state.settings, ...a.patch } };
