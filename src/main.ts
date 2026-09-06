@@ -666,6 +666,8 @@ const gestureCallbacks = {
   // fingers are still moving and wrong the moment they stop -- a reader who
   // sets a size and immediately backgrounds the app should not lose it.
   onSizeSettled: () => store.flush(),
+  // A two-finger tap over the ayah -- the touch counterpart of pressing T.
+  onToggleTranslation: () => toggleTranslation(),
   arabicSize: () => store.get().settings.arabicSize,
   // The same guard the keyboard uses: with a panel or the drawer open, the
   // reader is not reading, and a swipe over a scrim must not turn the ayah
