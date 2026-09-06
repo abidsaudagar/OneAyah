@@ -525,6 +525,18 @@ document.addEventListener('fullscreenchange', () => {
  * toggling, so the timer is left to run.
  */
 function paintVerse(moved = true): void {
+  // Nothing can be painted before boot has fetched the first surah, and three
+  // things here fire on their own schedule rather than on the reader's: the
+  // frame observer's first delivery, the Arabic faces landing, and a window
+  // resized while the fetch is still in flight. Any of them can arrive first,
+  // and each would paint an ayah that does not exist yet.
+  //
+  // Returning is the whole fix -- there is nothing to catch up on. `goToSurah`
+  // paints the moment the surah lands, and the frame observer has already
+  // recorded the height it fired for, so the verse arrives fitted to the frame
+  // it is actually in.
+  if (surah === undefined) return;
+
   const settings = store.get().settings;
   // Every caller that passes `false` is a repaint the reader did not step for
   // -- a resize, the real faces landing, a size or translation change. None of
