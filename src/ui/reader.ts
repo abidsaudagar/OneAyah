@@ -222,9 +222,10 @@ export class ReaderView {
         [['← →', 'ayah'], ['P', 'auto-advance'], ['[ ]', 'text size'],
           ['T', 'translation'], ['F', 'fullscreen']]),
       // The order a thumb will discover them in: the one that moves you, the
-      // one that moves you without moving, then the one you go looking for.
+      // one that moves you without moving, then the ones you go looking for.
       hintSet('hints__set--touch',
-        [['SWIPE', 'ayah'], ['TAP', 'left or right'], ['PINCH', 'text size']]));
+        [['SWIPE', 'ayah'], ['TAP', 'left or right'], ['PINCH', 'text size'],
+          ['TWO-FINGER TAP', 'translation']]));
 
     // Back on the left, next on the right, on both inputs -- the same sides the
     // arrow keys and the tap zones use, so there is one direction to learn

@@ -189,3 +189,27 @@ export function pinchSize(startSize: number, scale: number): number {
 export function clampSize(size: number): number {
   return Math.min(SIZE_MAX, Math.max(SIZE_MIN, Math.round(size)));
 }
+
+/* --------------------------------------------------- two-finger tap */
+
+/**
+ * The longest two fingers may rest on the frame and still count as a tap. A
+ * shade more generous than the one-finger `TAP_MAX_MS`: landing two fingers
+ * together and lifting them together is a slower thing to do cleanly.
+ */
+export const TWO_FINGER_TAP_MAX_MS = 500;
+
+/**
+ * Whether a two-finger touch was a tap -- the gesture that toggles the
+ * translation -- rather than a pinch or a rest.
+ *
+ * `spread` is the largest change in the distance between the two fingers seen
+ * over the whole gesture, in px. Staying under `PINCH_MIN_PX` is the same line
+ * the pinch itself will not cross until it is sure, so a gesture cannot be read
+ * as both. A tap that drifts past it is simply a small pinch, and belongs to
+ * the size.
+ */
+export function isTwoFingerTap(spread: number, elapsedMs: number): boolean {
+  if (elapsedMs > TWO_FINGER_TAP_MAX_MS) return false;
+  return Math.abs(spread) < PINCH_MIN_PX;
+}

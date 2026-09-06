@@ -102,7 +102,7 @@ export class TvView {
         el('span', { class: 'tv__hint tv__hint--keys',
           text: '← → TO MOVE · P TO PLAY OR PAUSE · [ ] FOR TEXT SIZE · T FOR TRANSLATION · ESC TO EXIT' }),
         el('span', { class: 'tv__hint tv__hint--touch',
-          text: 'SWIPE OR TAP A SIDE TO MOVE · PINCH FOR TEXT SIZE' })),
+          text: 'SWIPE OR TAP A SIDE TO MOVE · PINCH FOR TEXT SIZE · TWO-FINGER TAP FOR TRANSLATION' })),
       // Along the very bottom edge, under everything: it is the one thing here
       // that has to stay readable from the far side of a room.
       this.autoLine.root,
