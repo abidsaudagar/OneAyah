@@ -11,6 +11,7 @@ import { Session } from './app/session.ts';
 import type { Range } from './core/analytics.ts';
 import { celebrationFor } from './core/celebrate.ts';
 import { report, shouldAsk } from './core/feedback.ts';
+import { placeIn } from './core/places.ts';
 import { pointsPerVerse } from './core/scoring.ts';
 import { BUILD, FEEDBACK_FORM_URL } from './config.ts';
 import { download, exportBlob, parseBackup, pickFile } from './store/backup.ts';
@@ -225,8 +226,11 @@ const view = new ReaderView({
     openAbout,
     openFeedback,
   ),
-  onOpenDrawer: () => openDrawer(meta, surah.meta.n, store.get().coverage,
-    (n) => void goToSurah(n, 0)),
+  // A surah you have read before resumes where you left it; one you have never
+  // opened starts at its first ayah. The drawer has always said as much in its
+  // footer -- this is the line that makes it true.
+  onOpenDrawer: () => openDrawer(meta, surah.meta.n, store.get().coverage, store.get().places,
+    (n) => void goToSurah(n, placeIn(store.get().places, n) - 1)),
   onOpenFullscreen: () => void enterFullscreen(),
   onOpenBackup: () => openBackup(),
   onOpenStats: () => openStatsPanel(paintStats),
