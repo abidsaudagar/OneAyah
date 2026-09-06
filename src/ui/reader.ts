@@ -217,22 +217,17 @@ export class ReaderView {
       hintSet('hints__set--touch',
         [['SWIPE', 'ayah'], ['TAP', 'left or right'], ['PINCH', 'text size']]));
 
-    // Each control carries both of its faces and CSS shows one, because forward
-    // is not the same direction on the two inputs. On a keyboard, forward is
-    // `ArrowRight` and the button that matches it points right. On a touch
-    // screen the app is a mushaf: forward is leftward through the book, and the
-    // left of the frame is `next`, so the forward control belongs on the left.
+    // Back on the left, next on the right, on both inputs -- the same sides the
+    // arrow keys and the tap zones use, so there is one direction to learn
+    // rather than one per way of asking.
     //
-    // On touch it stops being an arrow. Swapping the pair's places AND their
-    // glyphs -- which is what a browser does to its own back and forward
-    // buttons in an RTL locale -- produces a row that is PIXEL-IDENTICAL to the
-    // desktop one while meaning the reverse of it: a left-pointing arrow on the
-    // left that goes forward. Nothing on screen could tell the two apart, and a
-    // reader arrives with every other app on their phone having taught them
-    // that a left arrow goes back. So the touch face is the word instead. It
-    // cannot be misread, and it names the side the tap zone behind it is on.
+    // Each control still carries two faces and CSS shows one, because on touch
+    // the arrow is not what is worth drawing. There is no key to point at; what
+    // is behind the button is a tap zone occupying that half of the frame, and
+    // a word names the half in a way an arrowhead does not. So the touch face
+    // is BACK and NEXT, sitting over the sides they stand for.
     //
-    // `aria-label` never swaps: the button's MEANING is fixed, only its face.
+    // `aria-label` never changes with the face: the button's MEANING is fixed.
     const glyphs = (keyboard: string, touch: string) => [
       el('span', { class: 'nav__glyph nav__glyph--keys', text: keyboard }),
       el('span', { class: 'nav__glyph nav__glyph--touch', text: touch }),
