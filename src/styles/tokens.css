@@ -43,6 +43,11 @@
      it, and Geeza Pro covers the ones that do not. */
   --font-indopak: "Al Qalam Quran Majeed", "Geeza Pro", "Noto Naskh Arabic", serif;
   --font-amiri: "Amiri Quran", "Geeza Pro", "Noto Naskh Arabic", serif;
+  /* Urdu. The fallbacks are the two nastaliq faces that ship with macOS/iOS and
+     Windows; only past those does it land on naskh, which is legible but is not
+     how Urdu is written. */
+  --font-urdu: "Noto Nastaliq Urdu", "Noto Nastaliq Urdu UI", "Jameel Noori Nastaleeq",
+    "Geeza Pro", "Noto Naskh Arabic", serif;
 
   /* --- the printed-page wash, painted over --surface. Only `paper` uses it. --- */
   --page-wash: none;

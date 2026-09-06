@@ -23,5 +23,11 @@
     "file": "quran-indopak.json",
     "bytes": 1721053,
     "sha256": "d6002981e4a55393dd65ac2ea45904bb43d652819a7d6096651b0446444a04a6"
+  },
+  "urdu": {
+    "url": "https://tanzil.net/trans/ur.jalandhry",
+    "file": "tanzil-ur-jalandhry.txt",
+    "bytes": 1450376,
+    "sha256": "c7e982b49b5e6f275559985caaf24f5e0136950f73f50f1a6c6f6a5281617c6a"
   }
 }

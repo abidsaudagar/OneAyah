@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  DRAG_CAP_PX, SIZE_MAX, SIZE_MIN, SWIPE_MAX_MS, SWIPE_MIN_PX,
-  clampSize, drag, isTap, pinchSize, swipe, tapZone,
+  DRAG_CAP_PX, PINCH_MIN_PX, SIZE_MAX, SIZE_MIN, SWIPE_MAX_MS, SWIPE_MIN_PX,
+  TWO_FINGER_TAP_MAX_MS,
+  clampSize, drag, isTap, isTwoFingerTap, pinchSize, swipe, tapZone,
 } from '../src/core/gesture.ts';
 
 const at = (x: number, y = 0) => ({ x, y });
@@ -122,6 +123,26 @@ describe('isTap', () => {
 
   it('rejects a press, which is a different gesture', () => {
     assert.ok(!isTap(at(100, 100), at(100, 100), 600));
+  });
+});
+
+describe('isTwoFingerTap', () => {
+  it('accepts two fingers set down and lifted without spreading', () => {
+    assert.ok(isTwoFingerTap(0, 120));
+    assert.ok(isTwoFingerTap(PINCH_MIN_PX - 1, 200));
+  });
+
+  it('rejects a gesture whose fingers spread far enough to pinch', () => {
+    assert.ok(!isTwoFingerTap(PINCH_MIN_PX, 200));
+    assert.ok(!isTwoFingerTap(80, 200));
+  });
+
+  it('rejects a rest, which is a different gesture', () => {
+    assert.ok(!isTwoFingerTap(0, TWO_FINGER_TAP_MAX_MS + 1));
+  });
+
+  it('does not care which way the separation moved', () => {
+    assert.ok(isTwoFingerTap(-4, 150));
   });
 });
 

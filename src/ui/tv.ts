@@ -18,6 +18,8 @@ import { clockText, el, speedText, tapOnly } from './dom.ts';
 import { Pager } from './pages.ts';
 import { Slide } from './slide.ts';
 import type { Surah } from '../data/quran.ts';
+import { TRANSLATIONS, type Settings } from '../types.ts';
+import { cycleOrder } from '../core/translation.ts';
 
 export interface TvCallbacks {
   onPrev: () => void;
@@ -54,6 +56,10 @@ export class TvView {
   /** The bar that fills while auto-advance holds this screenful. */
   private readonly autoLine = new AutoLine('autoline autoline--tv');
   private readonly elGoal: HTMLElement;
+  private readonly elHintKeys: HTMLElement;
+  private readonly elHintTouch: HTMLElement;
+  /** The language of the text currently in `elTrans`; see `showsTranslation`. */
+  private paintedLang: Surah['lang'] = 'en';
   private card: CelebrationCard | null = null;
   private stopConfetti: (() => void) | null = null;
 
@@ -75,6 +81,8 @@ export class TvView {
     this.elPart = el('div', { class: 'tv__part', attrs: { hidden: true } });
     this.elGoal = el('div', { class: 'tv__goal' },
       el('div', { class: 'bar' }, this.elBar), this.elCount);
+    this.elHintKeys = el('span', { class: 'tv__hint tv__hint--keys' });
+    this.elHintTouch = el('span', { class: 'tv__hint tv__hint--touch' });
 
     this.root = el('div', { class: 'tv', attrs: { role: 'dialog', 'aria-label': 'Fullscreen reader' } },
       this.elClock,
@@ -103,10 +111,10 @@ export class TvView {
         // Same reasoning as the reader's hint row: the keys mean nothing to a
         // thumb and the gestures mean nothing to a keyboard, so both are built
         // and CSS shows whichever the device can actually do.
-        el('span', { class: 'tv__hint tv__hint--keys',
-          text: '← → TO MOVE · P TO PLAY OR PAUSE · [ ] FOR TEXT SIZE · T FOR TRANSLATION · ESC TO EXIT' }),
-        el('span', { class: 'tv__hint tv__hint--touch',
-          text: 'SWIPE OR TAP A SIDE TO MOVE · PINCH FOR TEXT SIZE' })),
+        // Both halves name this reader's own language order, so they are
+        // filled in by `paintState` rather than written out here.
+        this.elHintKeys,
+        this.elHintTouch),
       // Along the very bottom edge, under everything: it is the one thing here
       // that has to stay readable from the far side of a room.
       this.autoLine.root,
@@ -117,27 +125,60 @@ export class TvView {
   }
 
   /**
-   * The same three steps the reader takes, in the same order: the face and the
-   * size go on first, then the ayah is split for the box those produce, then
+   * The same three steps the reader takes, in the same order: the faces and the
+   * sizes go on first, then the ayah is split for the box those produce, then
    * the part is painted. The translation is whole and stays whole while the
    * parts turn under it -- it is the meaning of the ayah, not of the screenful.
+   *
+   * The language is settled before the sizes, not after: the translation's size
+   * is scaled per script, so a size chosen against the language being replaced
+   * would be the wrong one to measure the split against.
    */
   paintVerse(surah: Surah, index: number, page: number, settings: Snapshot['settings']): void {
     this.elAyah.dataset.font = settings.arabicFont;
     this.elSurahTr.textContent = surah.meta.tr;
     this.elSurahAr.textContent = surah.meta.ar;
     this.elSurahNo.textContent = `${index + 1} of ${surah.meta.c}`;
-    this.sizeStack(settings);
     // The translation is measured before the split, not after: it is painted
     // first so the height it takes is already out of what the Arabic can use.
-    this.elTrans.textContent = surah.en[index] ?? '';
-    this.elTrans.hidden = !settings.showTranslation;
+    this.elTrans.textContent = surah.trans[index] ?? '';
+    this.typeTranslation(surah.lang);
+    this.sizeStack(settings);
+    this.elTrans.hidden = !this.showsTranslation(settings);
     this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', this.availableHeight());
     const shown = Math.min(Math.max(0, page), this.pages.length - 1);
     this.shownPage = shown;
     this.elAyah.textContent = this.pages[shown] ?? '';
     this.elPart.textContent = `PART ${shown + 1} OF ${this.pages.length}`;
     this.elPart.hidden = this.pages.length < 2;
+  }
+
+  /**
+   * Direction, language tag and the face CSS picks off `data-lang`. Driven by
+   * the text that has actually arrived, never by the setting: a language change
+   * is a fetch, and the two disagree until it lands.
+   *
+   * The size is not set here but in `sizeTranslation`, which is driven by
+   * `paintedLang` -- so this has to run before it, and does.
+   */
+  private typeTranslation(lang: Surah['lang']): void {
+    const t = TRANSLATIONS[lang];
+    this.paintedLang = lang;
+    this.elTrans.dataset.lang = lang;
+    this.elTrans.dir = t.rtl ? 'rtl' : 'ltr';
+    this.elTrans.lang = t.tag;
+  }
+
+  /**
+   * Whether the translation box may be shown right now. Changing language is a
+   * fetch, and until it lands the words in the box are still the old
+   * language's -- so the ask alone is not enough. It matters more here than in
+   * the reader: this view also gives up a quarter of the Arabic's size to make
+   * room for the translation, and doing that for one the reader is not being
+   * shown would resize the ayah for nothing.
+   */
+  private showsTranslation(s: Settings): boolean {
+    return s.showTranslation && s.translationLang === this.paintedLang;
   }
 
   /** How many parts the ayah on screen is being read in; 1 when it fits. */
@@ -196,12 +237,38 @@ export class TvView {
    * as it already did for the longest ayat with the translation on. That is the
    * better trade: `[` hands the reader the fit directly, and an automatic one
    * that misfires leaves them staring at the wrong size with no way back.
+   *
+   * The translation does NOT enter into it. Bringing one in used to take about
+   * a quarter off the Arabic to make room, which meant `T` resized the ayah --
+   * the one thing this app holds still -- and resized it by a different amount
+   * again when the language changed. The Arabic is now the size the reader
+   * asked for, translation or no translation, in either language. What the
+   * translation takes is room to PAGE in, the same trade the reader itself
+   * makes: a long ayah is read in more parts, at the size it was set to.
    */
-  private sizeStack(settings: Snapshot['settings']): void {
-    // With the English underneath, the Arabic gives up about a quarter of its
-    // size to make room. Verse-independent, so it costs nothing on a move.
-    const vw = (settings.arabicSize / 10) * (settings.showTranslation ? 0.74 : 1);
+  private sizeStack(settings: Settings): void {
+    const vw = settings.arabicSize / 10;
     this.elStack.style.fontSize = `clamp(24px, ${vw.toFixed(2)}vw, 160px)`;
+    this.sizeTranslation(settings);
+  }
+
+  /**
+   * The translation's own size, on the same rule the Arabic above it uses: the
+   * reader's setting is what it is worth on a 1000px window, and it grows with
+   * the screen from there because this mode is read from further away.
+   *
+   * It used to be a fraction of the ARABIC instead, which made entering
+   * fullscreen jump an 18px translation to something near 48px -- a different
+   * size from the one the reader had just set, arrived at by a route they had
+   * no way to see. Now the same window shows the same size in both modes, and
+   * the ceiling keeps a large screen from running away with it.
+   */
+  private sizeTranslation(settings: Settings): void {
+    const px = settings.translationSize * TRANSLATIONS[this.paintedLang].sizeScale;
+    this.elStack.style.setProperty(
+      '--tv-trans-size',
+      `clamp(${px.toFixed(1)}px, ${(px / 10).toFixed(2)}vw, ${(px * 2).toFixed(1)}px)`,
+    );
   }
 
   paintState(snap: Snapshot): void {
@@ -213,8 +280,15 @@ export class TvView {
     // T reaches the overlay through here as well as through paintVerse, so
     // toggling it -- from the key or from the settings panel -- never waits on
     // the next ayah to take effect, size included.
-    this.elTrans.hidden = !snap.settings.showTranslation;
+    this.elTrans.hidden = !this.showsTranslation(snap.settings);
     this.sizeStack(snap.settings);
+    // The key and the gesture take the same step, so they name the same order.
+    const order = `${cycleOrder(snap.settings.translationHome)
+      .map((l) => TRANSLATIONS[l].label.toUpperCase()).join(', ')}, OFF`;
+    this.elHintKeys.textContent = '← → TO MOVE · P TO PLAY OR PAUSE · [ ] FOR TEXT SIZE'
+      + ` · T FOR ${order} · ESC TO EXIT`;
+    this.elHintTouch.textContent = 'SWIPE OR TAP A SIDE TO MOVE · PINCH FOR TEXT SIZE'
+      + ` · TWO-FINGER TAP FOR ${order}`;
   }
 
   paintClock(remainingSec: number): void {

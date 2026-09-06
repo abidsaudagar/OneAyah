@@ -15,6 +15,15 @@
   src: url('/fonts/al-qalam-quran-majeed.woff2') format('woff2');
   font-weight: 400; font-style: normal; font-display: swap;
 }
+/* Urdu. The browser fetches a face only when something on the page is actually
+   set in it, so this 156 KB -- the heaviest single file the app ships -- is
+   paid for by the readers who turn Urdu on and by nobody else. Declaring it
+   here costs nothing until then. */
+@font-face {
+  font-family: 'Noto Nastaliq Urdu';
+  src: url('/fonts/noto-nastaliq-urdu-arabic.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
 @font-face {
   font-family: 'IBM Plex Mono';
   src: url('/fonts/ibm-plex-mono-400.woff2') format('woff2');

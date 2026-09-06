@@ -8,7 +8,7 @@
  * one it was before any of this existed.
  */
 import {
-  SCROLL_QUIET_MS, drag, isTap, pinchSize, swipe, tapZone,
+  PINCH_MIN_PX, SCROLL_QUIET_MS, drag, isTap, isTwoFingerTap, pinchSize, swipe, tapZone,
   type Move, type Point,
 } from '../core/gesture.ts';
 
@@ -55,6 +55,8 @@ export interface GestureCallbacks {
   onSize: (px: number) => void;
   /** The pinch is over and the size it landed on is final. */
   onSizeSettled: () => void;
+  /** A two-finger tap over the frame: turn the translation on or off. */
+  onCycleTranslation: () => void;
   /** The Arabic size a pinch should scale from. */
   arabicSize: () => number;
   /** True while a panel or the drawer is open, when nothing here applies. */
@@ -94,7 +96,13 @@ export function attachGestures(t: GestureTargets, cb: GestureCallbacks): () => v
   let inFrame = false;
   /** Set once the finger has committed to an axis, so a scroll is never re-judged. */
   let axis: 'x' | 'y' | null = null;
-  let pinch: { span: number; from: number } | null = null;
+  /**
+   * A two-finger touch in progress. `spread` is the largest change in finger
+   * separation seen so far: while it stays under `PINCH_MIN_PX` the gesture is
+   * still a candidate two-finger tap, and once it crosses it has committed to
+   * being a pinch and cannot go back.
+   */
+  let pinch: { span: number; from: number; startAt: number; spread: number } | null = null;
   let scrolledAt = 0;
   let swipedAt = 0;
   /** Coalesces a pinch to one repaint per frame however fast the fingers move. */
@@ -133,7 +141,7 @@ export function attachGestures(t: GestureTargets, cb: GestureCallbacks): () => v
       cb.onDrag(null);
       start = null;
       axis = null;
-      pinch = { span: dist(a, b), from: cb.arabicSize() };
+      pinch = { span: dist(a, b), from: cb.arabicSize(), startAt: e.timeStamp, spread: 0 };
       return;
     }
 
@@ -159,6 +167,11 @@ export function attachGestures(t: GestureTargets, cb: GestureCallbacks): () => v
       e.preventDefault();
       const span = dist(a, b);
       if (pinch.span <= 0) return;
+      pinch.spread = Math.max(pinch.spread, Math.abs(span - pinch.span));
+      // Under the threshold the fingers have not clearly spread yet, so this is
+      // still a possible two-finger tap -- don't nudge the size out from under
+      // it. Once crossed, it is a pinch for the rest of the gesture.
+      if (pinch.spread < PINCH_MIN_PX) return;
       pushSize(pinchSize(pinch.from, span / pinch.span));
       return;
     }
@@ -185,13 +198,21 @@ export function attachGestures(t: GestureTargets, cb: GestureCallbacks): () => v
       // Still a finger down: the other one lifting does not end the pinch, but
       // what remains must not then be read as the start of a swipe.
       if (e.touches.length >= 1) { start = null; axis = null; return; }
+      const wasTap = isTwoFingerTap(pinch.spread, e.timeStamp - pinch.startAt);
+      // The fingers never spread far enough to pinch, so no size was ever
+      // pushed -- there is nothing to settle either way.
+      const pinched = pinch.spread >= PINCH_MIN_PX;
       pinch = null;
       if (sizeFrame !== 0) {
         cancelAnimationFrame(sizeFrame);
         sizeFrame = 0;
-        cb.onSize(pendingSize);
+        if (pinched) cb.onSize(pendingSize);
       }
-      cb.onSizeSettled();
+      if (wasTap) {
+        if (!cb.blocked()) cb.onCycleTranslation();
+        return;
+      }
+      if (pinched) cb.onSizeSettled();
       return;
     }
 

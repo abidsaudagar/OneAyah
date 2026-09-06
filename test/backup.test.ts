@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { repair } from '../src/store/persist.ts';
 import { DEFAULT_SETTINGS, initialState, reduce } from '../src/core/state.ts';
 import {
-  ACCENTS, ARABIC_FONTS, AUTO_SPEEDS, SESSION_LENGTHS, THEMES,
+  ACCENTS, ARABIC_FONTS, AUTO_SPEEDS, SESSION_LENGTHS, THEMES, TRANSLATION_LANGS,
   type PersistedState, type Settings,
 } from '../src/types.ts';
 
@@ -114,6 +114,8 @@ describe('backup and repair', () => {
       const settings: Settings = {
         arabicFont: 'amiri-quran',
         showTranslation: true,
+        translationLang: 'ur',
+        translationHome: 'ur',
         arabicSize: 96,
         translationSize: 22,
         sessionLen: 140,
@@ -156,6 +158,13 @@ describe('backup and repair', () => {
       }
       for (const showTranslation of [true, false]) {
         assert.equal(round({ showTranslation }).showTranslation, showTranslation);
+      }
+      // Picking a language in the panel sets both: the one on screen, and the
+      // one T comes home to.
+      for (const lang of TRANSLATION_LANGS) {
+        const back = round({ translationLang: lang, translationHome: lang });
+        assert.equal(back.translationLang, lang);
+        assert.equal(back.translationHome, lang);
       }
     });
 
