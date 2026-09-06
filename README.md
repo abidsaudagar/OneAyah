@@ -59,26 +59,29 @@ have twenty verses behind you, then they stop earning their place.
 |---|---|
 | swipe right | next ayah |
 | swipe left | previous ayah |
-| tap the left of the ayah | next ayah |
-| tap the right of the ayah | previous ayah |
+| tap the right of the ayah | next ayah |
+| tap the left of the ayah | previous ayah |
 | pinch | Arabic text size |
 | press and hold the ayah number | jump to an ayah |
 
-Forward is leftward, because the book is. A rightward swipe pushes the ayah out
-to the right and brings the next one in from the left, which is what a mushaf
-does under a thumb, and the left of the frame is therefore the side that moves
-you on. The middle sixth of the frame is dead, so a resting thumb costs nothing
-and a pinch has somewhere safe to start.
+Forward is rightward, on every input that has a side to it: the right half of
+the frame, the right nav button, `ArrowRight`, and a rightward flick. The middle
+sixth of the frame is dead, so a resting thumb costs nothing and a pinch has
+somewhere safe to start.
 
-The two nav controls follow the same rule and swap sides on a touch screen --
-but they stop being arrows there and say `NEXT` and `BACK` instead. Mirroring
-the arrows as well as their positions, which is what a browser does to its own
-back and forward buttons in an RTL locale, produces a row that is pixel-identical
-to the desktop one while meaning the reverse of it; a reader arrives having been
-taught by every other app on their phone that a left arrow goes back.
+The book turns the other way, and the tap zones once followed the book rather
+than the phone. A tap zone has no page edge to give the game away -- the only
+thing a reader has to go on is the side, and every other app on their phone has
+already taught them which side is forward -- so the sides follow the phone.
 
-The arrow keys are not mirrored. `ArrowRight` is still next, and it agrees with
-the animation anyway, since next sends the ayah rightward either way.
+The nav controls keep those sides on a touch screen, `BACK` left and `NEXT`
+right, over the zones that mean the same. They say the words rather than drawing
+arrows: there is no key to point at, and a word names the half of the frame
+behind it in a way an arrowhead does not.
+
+The one place the book still shows is the animation. Next sends the ayah out to
+the right and brings the new one in from the left, which is what a mushaf does
+under a thumb, and it is 34px rather than a page width.
 
 Swipe and pinch go to any coarse pointer. Tap zones are held back to phones and
 tablets: a tap forward credits the verse it leaves, permanently, and on a

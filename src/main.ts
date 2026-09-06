@@ -312,9 +312,9 @@ async function enterFullscreen(): Promise<void> {
     onExit: () => void exitFullscreen(),
   });
   document.body.append(tv.root);
-  // The overlay keeps its own tap halves, which already send the left of the
-  // screen forward -- the RTL direction every gesture in this app now speaks --
-  // so only swipe and pinch are added here.
+  // The overlay keeps its own tap halves, which already send the right of the
+  // screen forward, on the same sides as the reader's, so only swipe and pinch
+  // are added here.
   if (touchCapable()) {
     detachTvGestures = attachGestures(
       { surface: tv.root, frame: tv.frame, taps: () => false }, gestureCallbacks);

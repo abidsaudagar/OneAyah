@@ -12,14 +12,19 @@
  *
  * ## Direction
  *
- * Every result in this file is RTL, because the text is. Forward through the
- * Qur'an is leftward through the book, which means the page you are LEAVING
- * travels right -- exactly what a mushaf does under your thumb. So a rightward
- * swipe is `next`, and the left side of the frame is `next`.
+ * Forward is rightward here, on every input that has a side to it: a rightward
+ * swipe is `next`, the right side of the frame is `next`, `ArrowRight` is
+ * `next` (see main.ts), and the forward button sits on the right.
  *
- * The keyboard is deliberately not mirrored to match (see main.ts): `ArrowRight`
- * stays `next` there, and it agrees with this anyway, since `next` sends the
- * ayah rightward either way.
+ * The text is RTL and the book turns the other way, and an earlier version of
+ * this file mirrored the touch controls to match it. It read correctly to
+ * anyone holding a mushaf and backwards to everyone else, because a tap zone
+ * has no page edge to give the game away -- the only thing a reader has to go
+ * on is the side, and every other app on their phone has already taught them
+ * which side is forward. So the sides follow the phone, not the book.
+ *
+ * The one place the book still shows is the slide (see ui/slide.ts): `next`
+ * sends the ayah out to the right, the way a page leaves under a thumb.
  */
 
 /** Which way a gesture asked the reader to move, if it asked at all. */
@@ -134,8 +139,9 @@ export const TAP_DEAD_BAND = 0.16;
 export const SCROLL_QUIET_MS = 300;
 
 /**
- * Which zone of a frame `x` px wide was tapped. RTL: the left of the frame is
- * forward, the right is back, and the middle is nothing.
+ * Which zone of a frame `x` px wide was tapped. The right of the frame is
+ * forward, the left is back, and the middle is nothing -- the side a reader
+ * arrives already knowing, from every other app on the phone.
  */
 export function tapZone(x: number, width: number): Move {
   if (width <= 0) return 'none';
@@ -143,8 +149,8 @@ export function tapZone(x: number, width: number): Move {
   if (fraction < 0 || fraction > 1) return 'none';
 
   const edge = (1 - TAP_DEAD_BAND) / 2;
-  if (fraction < edge) return 'next';
-  if (fraction > 1 - edge) return 'prev';
+  if (fraction < edge) return 'prev';
+  if (fraction > 1 - edge) return 'next';
   return 'none';
 }
 

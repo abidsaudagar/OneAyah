@@ -84,9 +84,9 @@ describe('drag', () => {
 });
 
 describe('tapZone', () => {
-  it('sends the left of the frame forward and the right of it back', () => {
-    assert.equal(tapZone(20, 400), 'next');
-    assert.equal(tapZone(380, 400), 'prev');
+  it('sends the right of the frame forward and the left of it back', () => {
+    assert.equal(tapZone(380, 400), 'next');
+    assert.equal(tapZone(20, 400), 'prev');
   });
 
   it('does nothing in the middle, so a resting thumb costs nothing', () => {
@@ -95,10 +95,10 @@ describe('tapZone', () => {
 
   it('keeps the dead band centred', () => {
     // 16% of 400 is 64px: 168..232 is dead, and either side of it is live.
-    assert.equal(tapZone(167, 400), 'next');
+    assert.equal(tapZone(167, 400), 'prev');
     assert.equal(tapZone(169, 400), 'none');
     assert.equal(tapZone(231, 400), 'none');
-    assert.equal(tapZone(233, 400), 'prev');
+    assert.equal(tapZone(233, 400), 'next');
   });
 
   it('ignores a point outside the frame', () => {

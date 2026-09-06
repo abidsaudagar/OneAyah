@@ -704,8 +704,8 @@ a.btn--primary { color: var(--surface); }
 }
 /* Big invisible tap targets, so a propped-up tablet works without a keyboard. */
 .tv__tap { position: absolute; top: 0; bottom: 0; width: 30%; }
-.tv__tap--prev { right: 0; }
-.tv__tap--next { left: 0; }
+.tv__tap--prev { left: 0; }
+.tv__tap--next { right: 0; }
 
 /* ------------------------------------------------------------------ responsive */
 
@@ -795,13 +795,12 @@ a.btn--primary { color: var(--surface); }
 :root[data-touch] .tv__hint--keys { display: none; }
 :root[data-touch] .tv__hint--touch { display: inline; }
 
-/* Forward is leftward through the book here, so the pair swaps sides AND
-   faces: `next` moves to the left of the row and shows a left-pointing arrow,
-   `prev` to the right showing a right-pointing one. Reversing the flex row is
-   what moves them; the glyph swap is in the markup, one span per face. The DOM
-   order, and therefore the tab order and what a screen reader announces, is
-   unchanged -- previous is still read first, and both keep their own labels. */
-:root[data-touch] .nav { flex-direction: row-reverse; }
+/* The pair keeps its sides on touch -- BACK left, NEXT right, over the tap
+   zones that mean the same -- and only changes face. The arrows go because
+   they are redundant next to a zone the reader is about to learn by tapping
+   it, and because a word says which side it names; the swap is in the markup,
+   one span per face, so the DOM order and what a screen reader announces are
+   the same on both. */
 :root[data-touch] .nav__glyph--keys { display: none; }
 :root[data-touch] .nav__glyph--touch { display: inline; }
 
