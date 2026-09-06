@@ -347,9 +347,9 @@ async function enterFullscreen(): Promise<void> {
     onExit: () => void exitFullscreen(),
   });
   document.body.append(tv.root);
-  // The overlay keeps its own tap halves, which already send the left of the
-  // screen forward -- the RTL direction every gesture in this app now speaks --
-  // so only swipe and pinch are added here.
+  // The overlay keeps its own tap halves, which already send the right of the
+  // screen forward, on the same sides as the reader's, so only swipe and pinch
+  // are added here.
   if (touchCapable()) {
     detachTvGestures = attachGestures(
       { surface: tv.root, frame: tv.frame, taps: () => false }, gestureCallbacks);
@@ -479,6 +479,32 @@ document.fonts?.ready.then(() => paintVerse(false)).catch(() => {});
 // `moved` is false: a window drag is not a step through the ayah and must not
 // re-arm the auto-advance dwell.
 window.addEventListener('resize', () => paintVerse(false));
+
+/** The frame height the ayah on screen was last fitted and split against. */
+let fittedFrameH = -1;
+
+/**
+ * The window is not the only thing that moves that frame. The frame is what
+ * the column LEAVES, so every other band moves it: the banner arriving or
+ * being dismissed, the hint row retiring at twenty verses, and the first
+ * paintState of the boot, which runs after the first verse is already on
+ * screen. Each one was leaving the ayah fitted to a frame it is no longer in,
+ * and on a landscape phone -- where the whole frame is a fifth of the window --
+ * a band appearing is most of the room the verse had.
+ *
+ * Watching the frame itself catches all of them, the window included, and says
+ * nothing about which band moved. It cannot feed itself: the frame is `flex: 1`
+ * in a column whose every other band is sized from the settings, so neither the
+ * size this repaints at nor the words it puts there has a vote in the height it
+ * is answering. The height is compared anyway, because an observer that fires
+ * on a fraction of a pixel should not cost a repaint.
+ */
+new ResizeObserver(() => {
+  const h = Math.round(view.frame.clientHeight);
+  if (h === fittedFrameH) return;
+  fittedFrameH = h;
+  paintVerse(false);
+}).observe(view.frame);
 
 // Browsers swallow Escape during native fullscreen, so the exit signal is the
 // fullscreenchange event, never a key handler.

@@ -741,8 +741,8 @@ a.btn--primary { color: var(--surface); }
 }
 /* Big invisible tap targets, so a propped-up tablet works without a keyboard. */
 .tv__tap { position: absolute; top: 0; bottom: 0; width: 30%; }
-.tv__tap--prev { right: 0; }
-.tv__tap--next { left: 0; }
+.tv__tap--prev { left: 0; }
+.tv__tap--next { right: 0; }
 
 /* ------------------------------------------------------------------ responsive */
 
@@ -844,13 +844,12 @@ a.btn--primary { color: var(--surface); }
 :root[data-touch] .tv__hint--keys { display: none; }
 :root[data-touch] .tv__hint--touch { display: inline; }
 
-/* Forward is leftward through the book here, so the pair swaps sides AND
-   faces: `next` moves to the left of the row and shows a left-pointing arrow,
-   `prev` to the right showing a right-pointing one. Reversing the flex row is
-   what moves them; the glyph swap is in the markup, one span per face. The DOM
-   order, and therefore the tab order and what a screen reader announces, is
-   unchanged -- previous is still read first, and both keep their own labels. */
-:root[data-touch] .nav { flex-direction: row-reverse; }
+/* The pair keeps its sides on touch -- BACK left, NEXT right, over the tap
+   zones that mean the same -- and only changes face. The arrows go because
+   they are redundant next to a zone the reader is about to learn by tapping
+   it, and because a word says which side it names; the swap is in the markup,
+   one span per face, so the DOM order and what a screen reader announces are
+   the same on both. */
 :root[data-touch] .nav__glyph--keys { display: none; }
 :root[data-touch] .nav__glyph--touch { display: inline; }
 
@@ -878,6 +877,15 @@ a.btn--primary { color: var(--surface); }
 :root[data-touch] .ayah,
 :root[data-touch] .tv__stack { touch-action: pan-y; }
 
+/* The browser paints its own box over whatever it decided was tapped -- a hard
+   blue rectangle on the ayah frame, drawn to the element's bounds and ignoring
+   its corners, and it lands on every tap because the frame carries the touch
+   listeners a swipe is read from. There is nothing to feed back: a tap turns
+   the page, and the page turning IS the feedback. Set on the root, where it
+   inherits, so the halves of the frame, the translation and the locator are
+   all quiet; the controls below get a press state of their own instead. */
+:root[data-touch] { -webkit-tap-highlight-color: transparent; }
+
 /* A long press on Arabic text raises the selection handles and the callout
    menu, which is a fight with every swipe that starts on the ayah. The English
    below stays selectable: it is the part anyone would want to copy. */
@@ -895,6 +903,15 @@ a.btn--primary { color: var(--surface); }
   .nav__arrow:hover { color: var(--hairline); background: none; }
   .goal-btn:hover { opacity: 1; }
   .locator__surah:hover, .locator__ayah:hover { color: var(--muted); }
+
+  /* What hover said on a desktop, said by the press instead: held down it
+     answers, lifted it lets go. This is what the native highlight was doing
+     for the buttons before it was turned off -- only in the app's own colours
+     and clipped to the radius each control already has. */
+  .icon-btn:active { opacity: 1; background: var(--hover); }
+  .nav__arrow:not([disabled]):active { color: var(--ink); background: var(--subtle); }
+  .goal-btn:active { opacity: 0.7; }
+  .locator__surah:active { color: var(--ink); }
 }
 
 /* --------------------------------------------------------------- landscape */
@@ -925,6 +942,14 @@ a.btn--primary { color: var(--surface); }
     height: min(calc(4.2 * var(--trans-size, 18px) + 34px), 38vh);
     padding: 10px 20px 6px;
   }
+  /* Restating the collapse, because the rule above outranks the one that says
+     it: `:root[data-touch] .translation` and `.translation:has(...)` weigh the
+     same, and this block is further down the file, so a landscape phone with
+     the translation OFF was reserving four lines of height for nothing. On a
+     390px-tall window that is a quarter of the screen, taken out of the one
+     band that gives it up -- the ayah frame, which is whatever the column
+     leaves. Same guard, said again where it has the weight to hold. */
+  :root[data-touch] .translation:has(> .translation__text[hidden]) { height: auto; }
   :root[data-touch] .locator { margin-top: 8px; }
   :root[data-touch] .nav { padding: 6px 20px 8px; gap: 8px; }
   :root[data-touch] .hints { padding: 0 20px 10px; gap: 4px 14px; }

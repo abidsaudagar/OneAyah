@@ -10,6 +10,8 @@ import { celebrationCopy, firstVisitChip } from '../core/celebrate.ts';
 import type { Snapshot } from '../core/state.ts';
 import { resolveTheme } from '../platform/theme.ts';
 import type { Theme } from '../types.ts';
+import { SIZE_MIN } from '../core/gesture.ts';
+import { fittedSize } from '../core/paginate.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
 import { AutoLine } from './autoline.ts';
 import { celebrationCard, type CelebrationCard } from './celebration.ts';
@@ -224,22 +226,17 @@ export class ReaderView {
       hintSet('hints__set--touch',
         [['SWIPE', 'ayah'], ['TAP', 'left or right'], ['PINCH', 'text size']]));
 
-    // Each control carries both of its faces and CSS shows one, because forward
-    // is not the same direction on the two inputs. On a keyboard, forward is
-    // `ArrowRight` and the button that matches it points right. On a touch
-    // screen the app is a mushaf: forward is leftward through the book, and the
-    // left of the frame is `next`, so the forward control belongs on the left.
+    // Back on the left, next on the right, on both inputs -- the same sides the
+    // arrow keys and the tap zones use, so there is one direction to learn
+    // rather than one per way of asking.
     //
-    // On touch it stops being an arrow. Swapping the pair's places AND their
-    // glyphs -- which is what a browser does to its own back and forward
-    // buttons in an RTL locale -- produces a row that is PIXEL-IDENTICAL to the
-    // desktop one while meaning the reverse of it: a left-pointing arrow on the
-    // left that goes forward. Nothing on screen could tell the two apart, and a
-    // reader arrives with every other app on their phone having taught them
-    // that a left arrow goes back. So the touch face is the word instead. It
-    // cannot be misread, and it names the side the tap zone behind it is on.
+    // Each control still carries two faces and CSS shows one, because on touch
+    // the arrow is not what is worth drawing. There is no key to point at; what
+    // is behind the button is a tap zone occupying that half of the frame, and
+    // a word names the half in a way an arrowhead does not. So the touch face
+    // is BACK and NEXT, sitting over the sides they stand for.
     //
-    // `aria-label` never swaps: the button's MEANING is fixed, only its face.
+    // `aria-label` never changes with the face: the button's MEANING is fixed.
     const glyphs = (keyboard: string, touch: string) => [
       el('span', { class: 'nav__glyph nav__glyph--keys', text: keyboard }),
       el('span', { class: 'nav__glyph nav__glyph--touch', text: touch }),
@@ -477,8 +474,15 @@ export class ReaderView {
     this.root.style.setProperty('--trans-size', `${settings.translationSize}px`);
 
     this.elAyah.dataset.font = settings.arabicFont;
-    this.elAyah.style.fontSize = `${settings.arabicSize}px`;
-    this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', this.availableHeight());
+    // Measured BEFORE the size goes on, and used for both the cap and the
+    // split, so the two cannot disagree about the frame they are fitting. The
+    // order is free: the frame is what the column leaves, and neither the type
+    // nor the verse inside it has a vote in that.
+    const available = this.availableHeight();
+    this.elAyah.style.fontSize = `${fittedSize(settings.arabicSize, available, SIZE_MIN)}px`;
+    // Zero for the pager, which has one answer for a box it cannot measure and
+    // does not need the distinction the cap above turns on.
+    this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', available ?? 0);
     const shown = Math.min(Math.max(0, page), this.pages.length - 1);
     this.shownPage = shown;
     this.elAyah.textContent = this.pages[shown] ?? '';
@@ -528,8 +532,15 @@ export class ReaderView {
   /**
    * The height a part has to fit, which is the frame minus its own padding.
    * The frame is fixed by the layout, so this does not move with the verse.
+   *
+   * Null, not zero, for a box that has not been laid out -- painted before it
+   * reached the document, or while fullscreen has the screen. A box that HAS
+   * been measured and has nothing left to give is a different answer, and the
+   * callers have to be able to tell the two apart: one is the absence of a
+   * measurement, the other is a real one of a window too short to read in.
    */
-  private availableHeight(): number {
+  private availableHeight(): number | null {
+    if (this.elAyahBox.clientHeight === 0) return null;
     const cs = getComputedStyle(this.elAyahBox);
     return this.elAyahBox.clientHeight
       - Number.parseFloat(cs.paddingTop) - Number.parseFloat(cs.paddingBottom);

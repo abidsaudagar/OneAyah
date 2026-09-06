@@ -83,7 +83,8 @@ export class TvView {
       // the frame instead of the Arabic jumping when T brings the English in.
       this.elStack,
       // Large invisible halves, so a propped-up tablet or a cast screen stays
-      // usable without a keyboard. RTL: the right half goes back.
+      // usable without a keyboard. Same sides as the reader's tap zones: the
+      // right half goes forward, the left goes back.
       el('button', {
         class: 'tv__tap tv__tap--prev', attrs: { 'aria-label': 'Previous ayah' },
         on: { click: cb.onPrev, keydown: tapOnly },
