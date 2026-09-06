@@ -106,6 +106,9 @@ export const CYCLE_THEMES = ['light', 'dark', 'paper'] as const;
 export const THEMES: readonly Theme[] = [...CYCLE_THEMES, 'system'];
 export type Accent = 'blue' | 'green' | 'purple' | 'black';
 
+/** In the order the settings panel offers them; the default leads. */
+export const ACCENTS: readonly Accent[] = ['blue', 'green', 'purple', 'black'] as const;
+
 export interface Settings {
   arabicFont: ArabicFont;
   /** Off by default: the ayah alone is the point. Toggle with T. */
@@ -165,6 +168,16 @@ export interface Position {
   ayah: number;
 }
 
+/**
+ * The ayah last stood on in each surah, keyed by surah number.
+ *
+ * `position` answers "where was I?" across a reload; this answers the smaller
+ * question the drawer asks -- "where was I in THAT one?" -- so jumping to a
+ * surah you have read before returns you to it rather than to its first ayah.
+ * Sparse, and bounded at 114 entries by construction.
+ */
+export type Places = Record<number, number>;
+
 export interface PersistedState {
   version: 1;
   days: Record<DayKey, DayRecord>;
@@ -172,6 +185,8 @@ export interface PersistedState {
   /** Highest rung the reader has earned the right to pick. */
   unlockedMax: Rung;
   position: Position;
+  /** Per-surah bookmarks; see `Places`. Always holds `position`'s own surah. */
+  places: Places;
   totals: { points: number; verses: number; seconds: number };
   settings: Settings;
   /**
