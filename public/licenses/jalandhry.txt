@@ -1,0 +1,34 @@
+Urdu translation
+================
+
+Fateh Muhammad Jalandhry (1863-1954), "Tarjuma-e-Quran".
+Served by the Tanzil Project as ur.jalandhry -- https://tanzil.net/trans/
+
+The text is reproduced verbatim; it has only been reshaped into JSON, by the
+same parser that reads Tanzil's Arabic, since both are served in the same
+sura|aya|text form.
+
+WHY THIS TRANSLATION -- Tanzil lists eight Urdu translations, and marks the
+copyrighted ones with an asterisk. Jalandhry is the only one carrying no mark.
+It is also the oldest and the most widely printed: the translator died in 1954,
+and this rendering has been the standard Urdu mushaf text in the subcontinent
+for the better part of a century. Maududi and Junagarhi are the two obvious
+alternatives and both are marked; neither was worth taking on a rights question
+this app does not need to have.
+
+TANZIL'S TERMS -- the translations page states:
+
+  "The translations provided at this page are for non-commercial purposes only.
+   If used otherwise, you need to obtain necessary permission from the
+   translator or the publisher. If you are using more than three of the
+   following translations in a website or application, we require you to put a
+   link back to this page to make sure that subsequent users have access to the
+   latest updates."
+
+This app is free, carries no advertising, sells nothing and has no account, so
+the non-commercial condition is met. It ships one translation from that list,
+not more than three, so the link-back requirement is not triggered -- the link
+is given above regardless, because a reader should be able to reach the source.
+
+This is a narrower grant than the Arabic text beside it, which is CC BY 3.0 and
+carries no such condition. It is recorded here rather than folded in with it.

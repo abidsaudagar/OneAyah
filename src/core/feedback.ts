@@ -8,7 +8,7 @@
  */
 import type { PersistedState, SessionLen } from '../types.ts';
 import type { Snapshot } from './state.ts';
-import { SCRIPT_OF } from '../types.ts';
+import { SCRIPT_OF, TRANSLATIONS } from '../types.ts';
 import type { DayMap } from './streak.ts';
 
 /**
@@ -69,7 +69,8 @@ export function report(state: PersistedState, snap: Snapshot, ctx: ReportContext
     ['time read', `${hours}h total`],
     ['position', `${state.position.surah}:${state.position.ayah}`],
     ['script', `${SCRIPT_OF[s.arabicFont]} · ${s.arabicFont} · ${s.arabicSize}px`],
-    ['translation', s.showTranslation ? `on · ${s.translationSize}px` : 'off'],
+    ['translation', s.showTranslation
+      ? `${TRANSLATIONS[s.translationLang].dir} · ${s.translationSize}px` : 'off'],
     ['session', `${sessionText(s.sessionLen)} · auto-advance ${
       s.autoAdvanceSec === null ? 'off' : `${s.autoAdvanceSec}s`}`],
     ['theme', `${s.theme} · ${s.accent}`],

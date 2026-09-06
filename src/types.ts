@@ -85,6 +85,49 @@ export const SCRIPT_DIR: Readonly<Record<ArabicScript, string>> = {
   uthmani: 'ar-uthmani',
   indopak: 'ar-indopak',
 };
+
+/**
+ * The languages a translation can be read in. One at a time: the reader shows
+ * ONE ayah, and stacking two translations under it would take the room from
+ * the thing the app exists to hold still.
+ */
+export type TranslationLang = 'en' | 'ur';
+
+/** In the order `T` cycles through them, and the order the panel offers them. */
+export const TRANSLATION_LANGS: readonly TranslationLang[] = ['en', 'ur'] as const;
+
+export interface TranslationMeta {
+  /** Data directory. */
+  dir: string;
+  /** What the panel calls it, in the language itself. */
+  label: string;
+  /** The translator, named under the choice. */
+  credit: string;
+  /** For the `lang` attribute, so a screen reader picks the right voice. */
+  tag: string;
+  /** Urdu is right-to-left; English is not. */
+  rtl: boolean;
+  /**
+   * What `translationSize` means in this script. Nastaliq hangs its words on a
+   * steep diagonal and sets a much smaller x-height than Latin, so the same px
+   * value is a comfortable read in one and a squint in the other. The locator
+   * already makes the same correction for the Arabic surah name at 11px mono.
+   * The reader still chooses ONE number; this is what it buys per language.
+   */
+  sizeScale: number;
+}
+
+export const TRANSLATIONS: Readonly<Record<TranslationLang, TranslationMeta>> = {
+  en: {
+    dir: 'en-itani', label: 'English', credit: 'Talal Itani',
+    tag: 'en', rtl: false, sizeScale: 1,
+  },
+  ur: {
+    dir: 'ur-jalandhry', label: 'اردو', credit: 'Fateh Muhammad Jalandhry',
+    tag: 'ur', rtl: true, sizeScale: 1.45,
+  },
+};
+
 export type Theme = 'light' | 'dark' | 'paper' | 'system';
 /** The three surfaces the header button cycles through; `system` is panel-only. */
 export const CYCLE_THEMES = ['light', 'dark', 'paper'] as const;
@@ -93,8 +136,20 @@ export type Accent = 'blue' | 'green' | 'purple' | 'black';
 
 export interface Settings {
   arabicFont: ArabicFont;
-  /** Off by default: the ayah alone is the point. Toggle with T. */
+  /**
+   * Off by default: the ayah alone is the point. `T` cycles English, then
+   * Urdu, then off -- see `cycleTranslation`, which owns that order.
+   */
   showTranslation: boolean;
+  /** Which translation is shown when `showTranslation` is on. */
+  translationLang: TranslationLang;
+  /**
+   * The reader's OWN language -- what the panel sets, and what `T` opens on and
+   * returns to when its turn closes. It is separate from `translationLang`
+   * because the cycle moves through the others in between, and a choice that
+   * the second press spent would not be a choice. See `cycleTranslation`.
+   */
+  translationHome: TranslationLang;
   /** px */
   arabicSize: number;
   /** px. The translation's family is fixed; only size is adjustable. */

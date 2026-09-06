@@ -26,19 +26,27 @@ Zero runtime dependencies. Measured gzipped, which is what GitHub Pages serves.
 
 | | gzip |
 |---|---|
-| App shell (JS + CSS + HTML) | 28.9 KB |
+| App shell (JS + CSS + HTML) | 29.0 KB |
 | Fonts (Al Qalam, Amiri Quran, IBM Plex Mono) | 137 KB |
-| First visit — shell + fonts + Al-Fātiḥah | **169 KB** |
-| Complete Qur'an, all three texts, cached for offline | 973 KB |
-| Everything, once fully offline | 1.10 MB |
+| First visit — shell + fonts + Al-Fātiḥah | **170 KB** |
+| Noto Nastaliq Urdu, fetched only if you read the Urdu | 156 KB |
+| Complete Qur'an, all four texts, cached for offline | 1.33 MB |
+| Everything, once fully offline | 1.65 MB |
 
 Only the current surah is fetched; the service worker precaches the rest in the
 background. Al-Baqarah, the largest surah, is 17.7 KB brotli on its own.
 
 The Indo-Pak script is a second Arabic text, not a second font over the first,
-so it costs a further 350 KB. It is precached with everything else, which is
-what makes switching script work on a plane -- and what makes a reader who
-never leaves Uthmani pay for it too.
+so it costs a further 350 KB. The Urdu translation costs 396 KB on the same
+terms. Both are precached with everything else, which is what makes switching
+script or language work on a plane -- and what makes a reader who never leaves
+Uthmani and English pay for them too.
+
+The Urdu FACE is the one thing here that is not paid for by everyone. Nastaliq
+is a 156 KB file, and a browser fetches a face only when something on the page
+is actually set in it, so a reader who never presses T past English never asks
+for it. It is in the precache, so going offline does not take it away from
+someone who does.
 
 ## Keyboard
 
@@ -46,12 +54,49 @@ never leaves Uthmani pay for it too.
 |---|---|
 | `←` `→` | previous / next ayah |
 | `[` `]` | Arabic text size |
-| `T` | show or hide the translation |
+| `T` | your translation, then the other, then off |
 | `F` | fullscreen |
 | `Esc` | leave fullscreen |
 
-The translation is off by default. These hints sit under the ayah until you
-have twenty verses behind you, then they stop earning their place.
+The translation is off by default, and `T` is a cycle rather than a toggle, so
+both translations are reachable from the keyboard without opening a panel.
+
+The cycle starts from YOUR language -- the one chosen in settings -- and comes
+home to it:
+
+| settings | `T` | `T` | `T` | `T` |
+|---|---|---|---|---|
+| English | English | Urdu | off | English |
+| اردو | Urdu | English | off | Urdu |
+
+A fixed order would have been simpler and was wrong: it spent the reader's own
+choice on the first press. Someone who had picked Urdu got English, found Urdu
+only on the second press, and lost it on the third. So the turn opens on the
+language they chose and hands it back when it closes, which is why `Settings`
+carries `translationHome` as well as `translationLang` -- the language the
+cycle is walking through is not the language the reader picked, and the second
+must survive the first. The hint under the ayah names each reader's own order.
+
+One translation is on screen at a time. Two stacked under the ayah would take
+the room from the thing this app exists to hold still.
+
+These hints sit under the ayah until you have twenty verses behind you, then
+they stop earning their place.
+
+Neither the translation nor its language changes the size of the Arabic, in
+either mode. Turning one on used to take about a quarter off the ayah in
+fullscreen, and switching to Urdu moved the frame in the reader, because Urdu
+is set larger and looser. The ayah is now the size you asked for, and what the
+translation costs is paging: a long ayah is read in more parts, at that size.
+The reserved box is measured from the unscaled setting so it is the same height
+in both languages; turning the translation off still hands its room back to the
+ayah, which is the point of reading without one.
+
+The fullscreen translation is sized from the same `translationSize` the reader
+uses, grown for the distance on the same rule the Arabic follows -- the setting
+is what it is worth on a 1000px window. It used to be a fraction of the ARABIC
+instead, which made entering fullscreen jump an 18px translation to nearly 48px
+and made `[` and `]` resize the translation too.
 
 ## Touch
 
@@ -137,7 +182,9 @@ the copied numbers, so a report names the code it came from.
 | Arabic text (Uthmani) | [Tanzil Project](https://tanzil.net) v1.1 | CC BY 3.0, verbatim only |
 | Arabic text (Indo-Pak) | [Quran.com API v4](https://api.quran.com/api/v4/quran/verses/indopak) | none published; see `public/licenses/indopak.txt` |
 | English translation | *Quran in English*, Talal Itani, [ClearQuran](https://www.clearquran.com) | see `public/licenses/clearquran.txt` |
+| Urdu translation | Fateh Muhammad Jalandhry, via [Tanzil](https://tanzil.net/trans/) | non-commercial; see `public/licenses/jalandhry.txt` |
 | Amiri Quran | aliftype | SIL OFL 1.1 |
+| Noto Nastaliq Urdu | Google | SIL OFL 1.1 |
 | Al Qalam Quran Majeed | Abdul Majeed Khan et al. | none published; see `public/licenses/fonts.txt` |
 
 Every text is reproduced verbatim and only reshaped into JSON. The one exception
@@ -149,3 +196,11 @@ Two of the assets ship without a published licence -- the Indo-Pak text and the
 Al Qalam face. Both are long-standing free downloads, redistributed unmodified
 and credited, and both are named here rather than quietly folded into the OFL
 line above. Full notices are in `public/licenses/` and shown in the app.
+
+The Urdu translation is the one asset under a narrower grant than the rest:
+Tanzil provides its translations for non-commercial use only, where the Arabic
+text beside it is CC BY 3.0 with no such condition. This app is free, sells
+nothing and carries no advertising, so the condition is met -- but it is a
+condition, and it is recorded rather than folded in. Jalandhry was chosen over
+the seven other Urdu texts Tanzil serves partly for that reason: it is the only
+one Tanzil does not mark as copyrighted, and the translator died in 1954.

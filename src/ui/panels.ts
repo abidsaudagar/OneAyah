@@ -12,8 +12,10 @@ import type { Snapshot } from '../core/state.ts';
 import { copyText, selectText } from '../platform/clipboard.ts';
 import { BUILD } from '../config.ts';
 import { unlockProgress } from '../core/unlock.ts';
+import { cycleOrder } from '../core/translation.ts';
 import {
-  RUNGS, SCRIPT_OF, SESSION_LABELS, SESSION_LENGTHS, THEMES, UNLOCK_DAYS,
+  RUNGS, SCRIPT_OF, SESSION_LABELS, SESSION_LENGTHS, THEMES, TRANSLATION_LANGS,
+  TRANSLATIONS, UNLOCK_DAYS,
   type Accent, type ArabicFont, type Rung, type SessionLen, type Settings,
 } from '../types.ts';
 import { clockText, el, num } from './dom.ts';
@@ -227,20 +229,46 @@ export function openSettings(
       stepper('Arabic size', `${settings.arabicSize} px · or press [ and ]`,
         () => set({ arabicSize: Math.max(24, settings.arabicSize - 6) }),
         () => set({ arabicSize: Math.min(200, settings.arabicSize + 6) })),
-      el('div', { class: 'row' },
+      el('div', { class: 'panel__section', text: 'TRANSLATION' }),
+      // One row, not two. Off and the two languages are three states of one
+      // thing -- what is under the ayah -- and T runs through them in this
+      // order, so the panel shows them in it too rather than making the reader
+      // hold "on/off" and "which one" apart in their head.
+      el('div', { class: 'row', style: 'border-top:0;padding-top:0' },
         el('div', {},
-          el('div', { class: 'row__label', text: 'Show translation' }),
-          el('div', { class: 'row__sub', text: 'Or press T while reading' })),
-        el('div', { class: 'tabs' },
+          el('div', { class: 'row__label', text: 'Show' }),
+          // The translator is named where the language is chosen. Two
+          // translations are two readings, not two encodings of one reading,
+          // and a reader is owed the name of whose they are being given.
+          el('div', { class: 'row__sub', text: settings.showTranslation
+            ? `${TRANSLATIONS[settings.translationLang].credit} · or press T to cycle`
+            : `Press T to cycle ${cycleOrder(settings.translationHome)
+              .map((l) => TRANSLATIONS[l].label).join(', ')}, off` })),
+        el('div', { class: 'tabs tabs--trans' },
           el('button', {
             text: 'OFF', attrs: { 'aria-selected': !settings.showTranslation },
             on: { click: () => set({ showTranslation: false }) },
           }),
-          el('button', {
-            text: 'ON', attrs: { 'aria-selected': settings.showTranslation },
-            on: { click: () => set({ showTranslation: true }) },
-          }))),
-      stepper('Translation size', `${settings.translationSize} px · font is fixed`,
+          ...TRANSLATION_LANGS.map((lang) => el('button', {
+            text: TRANSLATIONS[lang].label,
+            attrs: {
+              'aria-selected': settings.showTranslation && settings.translationLang === lang,
+              lang: TRANSLATIONS[lang].tag,
+            },
+            // Picking a language here makes it the reader's OWN -- the one T
+            // opens on and comes back to -- not just the one on screen now.
+            on: {
+              click: () => set({
+                showTranslation: true, translationLang: lang, translationHome: lang,
+              }),
+            },
+          })))),
+      // The px shown is what actually lands on the glyphs, scale included, so a
+      // reader who switches to Urdu and sees the type grow can find the number
+      // that grew. The face is what is fixed; the size is theirs.
+      stepper('Translation size',
+        `${Math.round(settings.translationSize
+          * TRANSLATIONS[settings.translationLang].sizeScale)} px · the face is fixed`,
         () => set({ translationSize: Math.max(12, settings.translationSize - 1) }),
         () => set({ translationSize: Math.min(40, settings.translationSize + 1) })),
 
@@ -479,14 +507,23 @@ export function openAbout(): void {
         '“Quran in English” by Talal Itani. ',
         el('a', { attrs: { href: 'https://www.clearquran.com', target: '_blank', rel: 'noreferrer' }, text: 'ClearQuran.com' })),
       el('p', { style: 'margin:0 0 12px' },
+        el('strong', { text: 'Urdu translation · ' }),
+        'Fateh Muhammad Jalandhry, as served by the Tanzil Project. Tanzil provides its translations for non-commercial use, which is what this is. ',
+        el('a', {
+          attrs: { href: 'https://tanzil.net/trans/', target: '_blank', rel: 'noreferrer' },
+          text: 'tanzil.net/trans',
+        })),
+      el('p', { style: 'margin:0 0 12px' },
         el('strong', { text: 'Fonts · ' }),
-        'Amiri Quran and IBM Plex Mono under the SIL Open Font License 1.1. Al Qalam Quran Majeed publishes no licence; it is redistributed unmodified and credited.'),
+        'Amiri Quran, Noto Nastaliq Urdu and IBM Plex Mono under the SIL Open Font License 1.1. Al Qalam Quran Majeed publishes no licence; it is redistributed unmodified and credited.'),
       el('p', { style: 'margin:0' },
         el('a', { attrs: { href: `${base}licenses/tanzil.txt`, target: '_blank' }, text: 'Full notices' }),
         ' · ',
         el('a', { attrs: { href: `${base}licenses/indopak.txt`, target: '_blank' }, text: 'Indo-Pak text' }),
         ' · ',
-        el('a', { attrs: { href: `${base}licenses/clearquran.txt`, target: '_blank' }, text: 'translation licence' }),
+        el('a', { attrs: { href: `${base}licenses/clearquran.txt`, target: '_blank' }, text: 'English licence' }),
+        ' · ',
+        el('a', { attrs: { href: `${base}licenses/jalandhry.txt`, target: '_blank' }, text: 'Urdu licence' }),
         ' · ',
         el('a', { attrs: { href: `${base}licenses/fonts.txt`, target: '_blank' }, text: 'fonts' })),
     ),

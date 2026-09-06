@@ -44,6 +44,16 @@ interface Want {
 
 const WANT: Want[] = [
   { family: 'Amiri+Quran', subset: 'arabic', files: [{ weight: 400, name: 'amiri-quran-arabic' }] },
+  // Urdu is written in nastaliq, and naskh is not a substitute for it -- an
+  // Urdu reader meets naskh Urdu about as often as an English reader meets
+  // blackletter. It is the heaviest file the app ships, and the only one a
+  // reader can avoid entirely: the browser fetches a face when something on
+  // the page is actually set in it, so English-only readers never ask for it.
+  {
+    family: 'Noto+Nastaliq+Urdu',
+    subset: 'arabic',
+    files: [{ weight: 400, name: 'noto-nastaliq-urdu-arabic' }],
+  },
   {
     family: 'IBM+Plex+Mono:wght@400;500;600',
     subset: 'latin',
@@ -141,6 +151,10 @@ Amiri Quran
   Copyright (c) 2010-2021, Khaled Hosny and contributors
   https://github.com/aliftype/amiri
 
+Noto Nastaliq Urdu
+  Copyright 2022 The Noto Project Authors
+  https://github.com/notofonts/nastaliq
+
 IBM Plex Mono
   Copyright (c) 2017, IBM Corp.
   https://github.com/IBM/plex
@@ -157,8 +171,8 @@ Al Qalam Quran Majeed -- NO PUBLISHED LICENCE
   Stated vendor URL: http://www.alqlm.org/fonts  (404 as of 2026-09; the site
   no longer serves the page the font's own metadata points at)
 
-This is the Indo-Pak face. Its position is weaker than the other three and is
-recorded plainly rather than glossed:
+This is the Indo-Pak face. Its position is weaker than the OFL faces above
+and is recorded plainly rather than glossed:
 
   - The font carries no licence text and no licence URL beyond the dead vendor
     page. Its OS/2 fsType is 0x0004, "preview and print" embedding.

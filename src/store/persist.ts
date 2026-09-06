@@ -5,8 +5,9 @@ import { initialState } from '../core/state.ts';
 import { createStore, quarantine, type Store, type WriteResult } from '../platform/storage.ts';
 import { DEFAULT_SETTINGS } from '../core/state.ts';
 import {
-  ARABIC_FONTS, RETIRED_FONTS, RUNGS, SESSION_LENGTHS, THEMES,
+  ARABIC_FONTS, RETIRED_FONTS, RUNGS, SESSION_LENGTHS, THEMES, TRANSLATION_LANGS,
   type ArabicFont, type PersistedState, type Rung, type Settings, type Theme,
+  type TranslationLang,
 } from '../types.ts';
 
 export const STORAGE_KEY = 'qread.state.v1';
@@ -39,6 +40,18 @@ export function repair(raw: unknown, nowMs: number): PersistedState | null {
   // matches no rule and leaves the app on the light palette silently.
   if (!THEMES.includes(s.theme as Theme)) s.theme = DEFAULT_SETTINGS.theme;
   s.showTranslation = s.showTranslation === true;
+  // Absent in every backup written before Urdu existed, and those readers were
+  // all reading English -- which is what the default is, so nothing moves
+  // under them. Junk takes the same path.
+  if (!TRANSLATION_LANGS.includes(s.translationLang as TranslationLang)) {
+    s.translationLang = DEFAULT_SETTINGS.translationLang;
+  }
+  // A backup from before the cycle had a home takes the language it was last
+  // showing, not the default -- that reader had already chosen, and the field
+  // is new, not empty.
+  if (!TRANSLATION_LANGS.includes(s.translationHome as TranslationLang)) {
+    s.translationHome = s.translationLang;
+  }
 
   const days: PersistedState['days'] = {};
   for (const [k, v] of Object.entries(r.days ?? {})) {

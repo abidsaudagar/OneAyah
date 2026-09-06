@@ -3,7 +3,7 @@
  *
  *   node --experimental-strip-types scripts/build-data.ts
  *
- * Downloads the four licensed sources, verifies them against counts that act as
+ * Downloads the five licensed sources, verifies them against counts that act as
  * their own checksums, and emits the static JSON the app ships.
  *
  * The licensed text is never altered. Reshaping into JSON is permitted by both
@@ -53,6 +53,14 @@ const SOURCES = {
     url: 'https://api.quran.com/api/v4/quran/verses/indopak',
     file: 'quran-indopak.json',
   },
+  // Tanzil serves its translations in the same `sura|aya|text` shape as the
+  // Arabic, so one parser reads both. Jalandhry is the one Urdu text on
+  // Tanzil's list carrying no copyright mark -- see the notice at the foot of
+  // this file for why that decided it over the seven others.
+  urdu: {
+    url: 'https://tanzil.net/trans/ur.jalandhry',
+    file: 'tanzil-ur-jalandhry.txt',
+  },
 } as const;
 
 /* ------------------------------------------------------------------ fetching */
@@ -76,8 +84,14 @@ const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
 /* ------------------------------------------------------------------- parsing */
 
-/** Tanzil `outType=txt-2` is `sura|aya|text` per line, plus a `#` notice block. */
-function parseArabic(raw: string): Map<number, string[]> {
+/**
+ * Tanzil's line format: `sura|aya|text` per line, plus a `#` notice block.
+ *
+ * Both the Arabic text and Tanzil's translations are served in it, so one
+ * parser reads both. `label` names the text in the errors, which is the whole
+ * of the difference between the two calls.
+ */
+function parseTanzil(label: string, raw: string): Map<number, string[]> {
   const bySurah = new Map<number, string[]>();
   let seen = 0;
 
@@ -93,14 +107,14 @@ function parseArabic(raw: string): Map<number, string[]> {
 
     const list = bySurah.get(surah) ?? [];
     if (list.length !== ayah - 1) {
-      throw new Error(`Arabic ${surah}:${ayah} arrived out of order`);
+      throw new Error(`${label} ${surah}:${ayah} arrived out of order`);
     }
     list.push(text);
     bySurah.set(surah, list);
     seen++;
   }
 
-  if (seen !== TOTAL_AYAT) throw new Error(`Arabic: expected ${TOTAL_AYAT} ayat, got ${seen}`);
+  if (seen !== TOTAL_AYAT) throw new Error(`${label}: expected ${TOTAL_AYAT} ayat, got ${seen}`);
   return bySurah;
 }
 
@@ -236,11 +250,12 @@ const kb = (n: number) => `${(n / 1024).toFixed(0)} KB`;
 
 async function main() {
   console.log('sources');
-  const [arabicBuf, metaBuf, englishBuf, indopakBuf] = await Promise.all([
+  const [arabicBuf, metaBuf, englishBuf, indopakBuf, urduBuf] = await Promise.all([
     fetchCached(SOURCES.arabic.url, SOURCES.arabic.file),
     fetchCached(SOURCES.meta.url, SOURCES.meta.file),
     fetchCached(SOURCES.english.url, SOURCES.english.file),
     fetchCached(SOURCES.indopak.url, SOURCES.indopak.file),
+    fetchCached(SOURCES.urdu.url, SOURCES.urdu.file),
   ]);
 
   const unpacked = join(CACHE, 'clearquran');
@@ -254,21 +269,24 @@ async function main() {
 
   console.log('\nparsing');
   const meta = parseMeta(metaBuf.toString('utf8'));
-  const arabic = parseArabic(arabicBuf.toString('utf8'));
+  const arabic = parseTanzil('Arabic', arabicBuf.toString('utf8'));
   const indopak = parseIndopak(indopakBuf.toString('utf8'));
   const english = parseEnglish(unpacked);
-  console.log(`  ${TOTAL_SURAHS} surahs, ${TOTAL_JUZ} juz, ${TOTAL_AYAT} ayat x3 texts`);
+  const urdu = parseTanzil('Urdu', urduBuf.toString('utf8'));
+  console.log(`  ${TOTAL_SURAHS} surahs, ${TOTAL_JUZ} juz, ${TOTAL_AYAT} ayat x4 texts`);
 
   console.log('\nemitting');
   const metaBytes = writeJson(join(DATA, 'meta.json'), meta);
   const arBytes = emitTexts('ar-uthmani', arabic, meta);
   const ipBytes = emitTexts('ar-indopak', indopak, meta);
   const enBytes = emitTexts('en-itani', english, meta);
+  const urBytes = emitTexts('ur-jalandhry', urdu, meta);
 
   mkdirSync(LICENSES, { recursive: true });
   writeFileSync(join(LICENSES, 'tanzil.txt'), TANZIL_NOTICE);
   writeFileSync(join(LICENSES, 'clearquran.txt'), CLEARQURAN_NOTICE);
   writeFileSync(join(LICENSES, 'indopak.txt'), INDOPAK_NOTICE);
+  writeFileSync(join(LICENSES, 'jalandhry.txt'), JALANDHRY_NOTICE);
   writeFileSync(
     join(ROOT, 'scripts', 'sources.json'),
     `${JSON.stringify(
@@ -278,6 +296,7 @@ async function main() {
         meta: { ...SOURCES.meta, bytes: metaBuf.length, sha256: sha256(metaBuf) },
         english: { ...SOURCES.english, bytes: englishBuf.length, sha256: sha256(englishBuf) },
         indopak: { ...SOURCES.indopak, bytes: indopakBuf.length, sha256: sha256(indopakBuf) },
+        urdu: { ...SOURCES.urdu, bytes: urduBuf.length, sha256: sha256(urduBuf) },
       },
       null,
       2,
@@ -288,7 +307,8 @@ async function main() {
   console.log(`  ar-uthmani   ${kb(arBytes)} across ${TOTAL_SURAHS} files`);
   console.log(`  ar-indopak   ${kb(ipBytes)} across ${TOTAL_SURAHS} files`);
   console.log(`  en-itani     ${kb(enBytes)} across ${TOTAL_SURAHS} files`);
-  console.log(`  licenses     3 files\n`);
+  console.log(`  ur-jalandhry ${kb(urBytes)} across ${TOTAL_SURAHS} files`);
+  console.log(`  licenses     4 files\n`);
 }
 
 /* ------------------------------------------------------------------- notices */
@@ -333,6 +353,42 @@ distributed openly through the Quranic Universal Library (qul.tarteel.ai, by
 Tarteel AI). No claim of ownership is made here, and the text is redistributed
 unmodified beyond the two mechanical steps above. If the maintainers state
 terms that this does not satisfy, this file should be revisited.
+`;
+
+const JALANDHRY_NOTICE = `Urdu translation
+================
+
+Fateh Muhammad Jalandhry (1863-1954), "Tarjuma-e-Quran".
+Served by the Tanzil Project as ur.jalandhry -- https://tanzil.net/trans/
+
+The text is reproduced verbatim; it has only been reshaped into JSON, by the
+same parser that reads Tanzil's Arabic, since both are served in the same
+sura|aya|text form.
+
+WHY THIS TRANSLATION -- Tanzil lists eight Urdu translations, and marks the
+copyrighted ones with an asterisk. Jalandhry is the only one carrying no mark.
+It is also the oldest and the most widely printed: the translator died in 1954,
+and this rendering has been the standard Urdu mushaf text in the subcontinent
+for the better part of a century. Maududi and Junagarhi are the two obvious
+alternatives and both are marked; neither was worth taking on a rights question
+this app does not need to have.
+
+TANZIL'S TERMS -- the translations page states:
+
+  "The translations provided at this page are for non-commercial purposes only.
+   If used otherwise, you need to obtain necessary permission from the
+   translator or the publisher. If you are using more than three of the
+   following translations in a website or application, we require you to put a
+   link back to this page to make sure that subsequent users have access to the
+   latest updates."
+
+This app is free, carries no advertising, sells nothing and has no account, so
+the non-commercial condition is met. It ships one translation from that list,
+not more than three, so the link-back requirement is not triggered -- the link
+is given above regardless, because a reader should be able to reach the source.
+
+This is a narrower grant than the Arabic text beside it, which is CC BY 3.0 and
+carries no such condition. It is recorded here rather than folded in with it.
 `;
 
 const CLEARQURAN_NOTICE = `English translation
