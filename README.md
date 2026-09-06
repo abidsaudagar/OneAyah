@@ -45,6 +45,7 @@ never leaves Uthmani pay for it too.
 | | |
 |---|---|
 | `←` `→` | previous / next ayah |
+| `P` | start or pause auto-advance |
 | `[` `]` | Arabic text size |
 | `T` | show or hide the translation |
 | `F` | fullscreen |
@@ -52,6 +53,39 @@ never leaves Uthmani pay for it too.
 
 The translation is off by default. These hints sit under the ayah until you
 have twenty verses behind you, then they stop earning their place.
+
+## Auto-advance
+
+`P` hands the page turns to the app, so a phone propped on a shelf or a laptop
+at the far end of a table can be read without reaching it. It works in the
+reader and in fullscreen alike -- having to press `F` first would put the one
+gesture such a reader cannot make in front of the one thing they need. A hairline
+along the bottom edge fills as the hold runs down, so a turn is never a surprise.
+
+Each screenful is held for as long as its own words need. The time is built from
+the words on screen and the letters in them -- `مِن` and `وَٱلْمُسْتَغْفِرِينَ`
+are one word each and nothing like the same amount of reading -- plus the English
+when the translation is showing, and the marks over the letters are not counted,
+so the same verse takes the same time in either orthography. At the default pace
+the basmala is held five seconds and Al-Fātiḥah's last ayah eleven. A long ayah
+is still read in parts, and each part earns its own hold.
+
+Settings has the dial: ten rungs from `0.5×` to `2.5×`, labelled in Arabic words
+a minute so the number means something. Whether it is RUNNING is not a setting
+and is never persisted -- every reload starts paused, because an app that began
+turning pages by itself the moment a tab opened would be wrong in the way an
+autoplaying video is.
+
+It pauses itself for a hidden tab, and holds its place rather than turning the
+page behind an open panel or the surah drawer. It stops at 114:6, and nowhere
+else: a surah ending is not a reason to make someone reach for the keyboard they
+were trying to avoid. Turns credit verses exactly as reading by hand does, and
+count as activity for the session clock -- otherwise `TIME READ` would freeze a
+minute in while verses went on banking, and the two halves of the same session
+would disagree about whether anyone was there.
+
+The arithmetic is a pure function in `src/core/dwell.ts` with its own tests;
+`src/main.ts` holds only the timer and the guards.
 
 ## Touch
 
@@ -63,6 +97,9 @@ have twenty verses behind you, then they stop earning their place.
 | tap the right of the ayah | previous ayah |
 | pinch | Arabic text size |
 | press and hold the ayah number | jump to an ayah |
+
+There is no gesture for auto-advance -- a thumb that can reach the screen does
+not need it. Settings turns it on and off instead.
 
 Forward is leftward, because the book is. A rightward swipe pushes the ayah out
 to the right and brings the next one in from the left, which is what a mushaf

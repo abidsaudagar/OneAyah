@@ -1,6 +1,7 @@
 /**
  * Loading, repair and persistence of the reader's progress.
  */
+import { snapSpeed } from '../core/dwell.ts';
 import { initialState } from '../core/state.ts';
 import { createStore, quarantine, type Store, type WriteResult } from '../platform/storage.ts';
 import { DEFAULT_SETTINGS } from '../core/state.ts';
@@ -34,7 +35,12 @@ export function repair(raw: unknown, nowMs: number): PersistedState | null {
     // anything else -- junk, a typo, a hand-edited backup -- takes the default.
     s.arabicFont = RETIRED_FONTS[s.arabicFont as string] ?? DEFAULT_SETTINGS.arabicFont;
   }
-  if (s.autoAdvanceSec !== null) s.autoAdvanceSec = clamp(Number(s.autoAdvanceSec) || 12, 5, 30);
+  s.autoAdvanceSpeed = snapSpeed(s.autoAdvanceSpeed);
+  // Auto-advance used to be a fixed dwell in seconds, fullscreen only. The
+  // number meant nothing under the length-derived model that replaced it -- 12
+  // seconds is a crawl on a short ayah and a blur on a long one -- so it is
+  // dropped rather than converted, and the reader lands on the default pace.
+  delete (s as { autoAdvanceSec?: unknown }).autoAdvanceSec;
   // An unknown theme would be stamped straight onto data-theme, where it
   // matches no rule and leaves the app on the light palette silently.
   if (!THEMES.includes(s.theme as Theme)) s.theme = DEFAULT_SETTINGS.theme;

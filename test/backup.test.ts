@@ -45,14 +45,23 @@ describe('backup and repair', () => {
       ...s,
       settings: {
         ...s.settings, arabicSize: 9999, translationSize: -5,
-        sessionLen: 3600, arabicFont: 'comic-sans', autoAdvanceSec: 500,
+        sessionLen: 3600, arabicFont: 'comic-sans', autoAdvanceSpeed: 500,
       },
     }, NOW)!;
     assert.equal(out.settings.arabicSize, 200);
     assert.equal(out.settings.translationSize, 12);
     assert.equal(out.settings.sessionLen, 70);
     assert.equal(out.settings.arabicFont, 'al-qalam-indopak');
-    assert.equal(out.settings.autoAdvanceSec, 30);
+    // Snapped to the top of the ladder, not clamped to some other number: a
+    // speed that is not a rung would leave `+` and `-` unable to reach it.
+    assert.equal(out.settings.autoAdvanceSpeed, 2.5);
+  });
+
+  it('drops the retired fixed-seconds auto-advance rather than carrying it forever', () => {
+    const s = withReading();
+    const out = repair({ ...s, settings: { ...s.settings, autoAdvanceSec: 12 } }, NOW)!;
+    assert.ok(!('autoAdvanceSec' in out.settings));
+    assert.equal(out.settings.autoAdvanceSpeed, 1);
   });
 
   it('hands a reader of the retired Noto face to Amiri, not to the default', () => {
