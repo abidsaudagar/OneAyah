@@ -10,6 +10,8 @@ import { celebrationCopy, firstVisitChip } from '../core/celebrate.ts';
 import type { Snapshot } from '../core/state.ts';
 import { resolveTheme } from '../platform/theme.ts';
 import type { Theme } from '../types.ts';
+import { SIZE_MIN } from '../core/gesture.ts';
+import { fittedSize } from '../core/paginate.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
 import { celebrationCard, type CelebrationCard } from './celebration.ts';
 import { confetti } from './confetti.ts';
@@ -457,8 +459,15 @@ export class ReaderView {
     this.root.style.setProperty('--trans-size', `${settings.translationSize}px`);
 
     this.elAyah.dataset.font = settings.arabicFont;
-    this.elAyah.style.fontSize = `${settings.arabicSize}px`;
-    this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', this.availableHeight());
+    // Measured BEFORE the size goes on, and used for both the cap and the
+    // split, so the two cannot disagree about the frame they are fitting. The
+    // order is free: the frame is what the column leaves, and neither the type
+    // nor the verse inside it has a vote in that.
+    const available = this.availableHeight();
+    this.elAyah.style.fontSize = `${fittedSize(settings.arabicSize, available, SIZE_MIN)}px`;
+    // Zero for the pager, which has one answer for a box it cannot measure and
+    // does not need the distinction the cap above turns on.
+    this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', available ?? 0);
     const shown = Math.min(Math.max(0, page), this.pages.length - 1);
     this.elAyah.textContent = this.pages[shown] ?? '';
     this.elLocPart.textContent = ` · part ${shown + 1} of ${this.pages.length}`;
@@ -487,8 +496,15 @@ export class ReaderView {
   /**
    * The height a part has to fit, which is the frame minus its own padding.
    * The frame is fixed by the layout, so this does not move with the verse.
+   *
+   * Null, not zero, for a box that has not been laid out -- painted before it
+   * reached the document, or while fullscreen has the screen. A box that HAS
+   * been measured and has nothing left to give is a different answer, and the
+   * callers have to be able to tell the two apart: one is the absence of a
+   * measurement, the other is a real one of a window too short to read in.
    */
-  private availableHeight(): number {
+  private availableHeight(): number | null {
+    if (this.elAyahBox.clientHeight === 0) return null;
     const cs = getComputedStyle(this.elAyahBox);
     return this.elAyahBox.clientHeight
       - Number.parseFloat(cs.paddingTop) - Number.parseFloat(cs.paddingBottom);

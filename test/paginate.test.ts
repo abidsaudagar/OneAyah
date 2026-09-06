@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { paginate } from '../src/core/paginate.ts';
+import { ARABIC_LINE, fittedSize, paginate } from '../src/core/paginate.ts';
 
 /** Stands in for measured height: a run fits while it is within `budget` characters. */
 const upTo = (budget: number) => (run: string) => run.length <= budget;
@@ -51,5 +51,49 @@ describe('paginate', () => {
     // substring one: 'wo thre' is inside the text, ' wo thre ' is not.
     assert.ok(seen.every((run) => ` ${text} `.includes(` ${run} `)),
       `not a whole-word run: ${JSON.stringify(seen)}`);
+  });
+});
+
+describe('fittedSize', () => {
+  const MIN = 24;
+
+  it('paints the size the reader chose when the frame can show it', () => {
+    // A portrait phone: ~500px of frame holds a 128px line more than twice over.
+    assert.equal(fittedSize(128, 500, MIN), 128);
+  });
+
+  it('caps a portrait size down to the line a landscape frame can hold', () => {
+    // 90px of frame, and a line is 1.9 times the size: 47px, not 128.
+    assert.equal(fittedSize(128, 90, MIN), 47);
+  });
+
+  it('leaves a whole line inside the frame, never a hair over it', () => {
+    for (const available of [50, 90, 120, 240, 333, 512]) {
+      assert.ok(fittedSize(200, available, MIN) * ARABIC_LINE <= available);
+    }
+  });
+
+  it('never returns something too small to read', () => {
+    assert.equal(fittedSize(128, 20, MIN), MIN);
+  });
+
+  it('paints as asked when there is no box to measure yet', () => {
+    assert.equal(fittedSize(128, null, MIN), 128);
+  });
+
+  it('reads a measured zero as a window with nothing left, not as no measurement', () => {
+    assert.equal(fittedSize(128, 0, MIN), MIN);
+    assert.equal(fittedSize(128, -10, MIN), MIN);
+  });
+
+  it('is a cap and never a promotion: a small size stays small in a tall frame', () => {
+    assert.equal(fittedSize(32, 900, MIN), 32);
+  });
+
+  it('settles in one pass -- capping a capped size changes nothing', () => {
+    for (const available of [40, 90, 200, 640]) {
+      const once = fittedSize(128, available, MIN);
+      assert.equal(fittedSize(once, available, MIN), once);
+    }
   });
 });
