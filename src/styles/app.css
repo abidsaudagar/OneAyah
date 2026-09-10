@@ -564,10 +564,12 @@ a.btn--primary { color: var(--surface); }
   box-shadow: var(--shadow-modal);
   display: flex; flex-direction: column;
 }
+.drawer__head { display: flex; align-items: center; gap: 10px; margin: 22px 24px 18px; }
 .drawer__tabs {
-  display: flex; margin: 22px 24px 18px;
+  display: flex; flex: 1; min-width: 0;
   border: 1px solid var(--border-strong); border-radius: var(--r-md); overflow: hidden;
 }
+.drawer__close { flex: none; }
 .drawer__tab {
   flex: 1; text-align: center; padding: 9px 0;
   font: 500 11px/1 var(--font-mono); color: var(--muted);

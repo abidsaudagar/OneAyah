@@ -10,10 +10,14 @@ import type { Places, QuranMeta, SurahMeta } from '../types.ts';
 import { el } from './dom.ts';
 
 let open: HTMLElement | null = null;
+/** Undoes the document-level Escape listener the open drawer installed. */
+let releaseKeys: (() => void) | null = null;
 
 export function closeDrawer(): void {
   open?.remove();
   open = null;
+  releaseKeys?.();
+  releaseKeys = null;
 }
 
 export const isDrawerOpen = (): boolean => open !== null;
@@ -76,6 +80,17 @@ export function openDrawer(
     on: { input: (e: Event) => render((e.target as HTMLInputElement).value) },
   });
 
+  // On a phone the drawer is the whole screen: there is no scrim edge left to
+  // tap and no Escape key to press, so the way out has to be drawn. It sits in
+  // the header, above the list, where it stays put while the list scrolls.
+  const shut = el('button', {
+    class: 'icon-btn drawer__close',
+    attrs: { type: 'button', 'aria-label': 'Close surah list', title: 'Close' },
+    html: `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4.6 4.6l8.8 8.8M13.4 4.6l-8.8 8.8"/></svg>`,
+    on: { click: () => closeDrawer() },
+  });
+
   const tab = (label: string, active: boolean, enabled: boolean) => el('button', {
     class: 'drawer__tab',
     text: label,
@@ -83,8 +98,10 @@ export function openDrawer(
   });
 
   const panel = el('aside', { class: 'drawer', attrs: { role: 'dialog', 'aria-label': 'Surahs' } },
-    el('div', { class: 'drawer__tabs' },
-      tab('SURAH', true, true), tab('JUZ', false, false), tab('BOOKMARKS', false, false)),
+    el('div', { class: 'drawer__head' },
+      el('div', { class: 'drawer__tabs' },
+        tab('SURAH', true, true), tab('JUZ', false, false), tab('BOOKMARKS', false, false)),
+      shut),
     search,
     list,
     el('p', {
@@ -103,7 +120,7 @@ export function openDrawer(
     if (e.key === 'Escape') { e.stopPropagation(); closeDrawer(); }
   };
   document.addEventListener('keydown', onKey, true);
-  scrim.addEventListener('remove', () => document.removeEventListener('keydown', onKey, true));
+  releaseKeys = () => document.removeEventListener('keydown', onKey, true);
 
   render('');
   document.body.append(scrim);
