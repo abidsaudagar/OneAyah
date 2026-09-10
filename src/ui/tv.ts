@@ -15,10 +15,11 @@ import { AutoLine } from './autoline.ts';
 import { celebrationCard, type CelebrationCard } from './celebration.ts';
 import { confetti } from './confetti.ts';
 import { clockText, el, speedText, tapOnly } from './dom.ts';
+import { fittedTranslationSize } from '../core/paginate.ts';
 import { Pager } from './pages.ts';
 import { Slide } from './slide.ts';
 import type { Surah } from '../data/quran.ts';
-import { TRANSLATIONS, type Settings } from '../types.ts';
+import { TRANSLATION_SIZE_MIN, TRANSLATIONS, type Settings } from '../types.ts';
 import { cycleOrder } from '../core/translation.ts';
 
 export interface TvCallbacks {
@@ -145,6 +146,7 @@ export class TvView {
     this.typeTranslation(surah.lang);
     this.sizeStack(settings);
     this.elTrans.hidden = !this.showsTranslation(settings);
+    this.fitTranslation(settings);
     this.pages = this.pager.split(this.elAyah, surah.ar[index] ?? '', this.availableHeight());
     const shown = Math.min(Math.max(0, page), this.pages.length - 1);
     this.shownPage = shown;
@@ -263,12 +265,62 @@ export class TvView {
    * no way to see. Now the same window shows the same size in both modes, and
    * the ceiling keeps a large screen from running away with it.
    */
+  /** What `clamp(px, px/10 vw, px*2)` -- the rule both sizes here follow -- comes to. */
+  private clampedPx(px: number): number {
+    return Math.min(px * 2, Math.max(px, (px / 10) * (window.innerWidth / 100)));
+  }
+
   private sizeTranslation(settings: Settings): void {
-    const px = settings.translationSize * TRANSLATIONS[this.paintedLang].sizeScale;
+    const t = TRANSLATIONS[this.paintedLang];
+    const px = settings.translationSize * t.sizeScale;
     this.elStack.style.setProperty(
       '--tv-trans-size',
       `clamp(${px.toFixed(1)}px, ${(px / 10).toFixed(2)}vw, ${(px * 2).toFixed(1)}px)`,
     );
+    // The leading the script is set at, from the one place that owns it, so the
+    // box and the type cannot disagree about how tall a line of it is.
+    this.elStack.style.setProperty('--tv-trans-lead', String(t.lead));
+  }
+
+  /**
+   * The size the translation is actually set at: the reader's, or the largest
+   * smaller one that fits the box whole. The reasoning is the reader's own --
+   * see `fitTranslation` there -- and it matters more here, where there is no
+   * scrollbar to notice from a sofa and no pointer to reach one with.
+   *
+   * The box's HEIGHT still comes from the size the reader chose, so the frame
+   * the ayah is paged against does not move from verse to verse; only the type
+   * inside it gives way.
+   */
+  private fitTranslation(settings: Settings): void {
+    const scale = TRANSLATIONS[this.paintedLang].sizeScale;
+    const want = settings.translationSize;
+    // The same clamp `sizeTranslation` builds for the box, so a fitted size and
+    // an unfitted one grow with the screen by the same rule.
+    const setPx = (px: number) =>
+      this.elStack.style.setProperty('--tv-trans-fit', `${px.toFixed(1)}px`);
+    const t = TRANSLATIONS[this.paintedLang];
+    const wantPx = this.clampedPx(want * scale);
+    if (this.elTrans.hidden) {
+      setPx(wantPx);
+      delete this.elStack.dataset.clipped;
+      return;
+    }
+    // The box's ceiling, worked out rather than read back. The stylesheet caps
+    // it at four lines or 40% of the frame, whichever is less -- but the box is
+    // content-sized under that cap, so `clientHeight` would answer with the
+    // room a short translation happens to use rather than the room there is.
+    // Both halves of the cap are known here, and `getComputedStyle` hands a
+    // `min()` back unresolved anyway.
+    const boxH = Math.min(4 * wantPx * t.lead, 0.4 * this.elStack.clientHeight);
+    const boxW = this.elTrans.clientWidth;
+    const chars = (this.elTrans.textContent ?? '').length;
+    const floorPx = this.clampedPx(Math.min(TRANSLATION_SIZE_MIN, want) * scale);
+    setPx(fittedTranslationSize(wantPx, floorPx, chars, boxW, boxH, t.lead, t.advance));
+    // By a whole step, not by a hair; see the reader's fit for why.
+    if (fittedTranslationSize(wantPx, 1, chars, boxW, boxH, t.lead, t.advance) + 1 < floorPx) {
+      this.elStack.dataset.clipped = 'true';
+    } else delete this.elStack.dataset.clipped;
   }
 
   paintState(snap: Snapshot): void {
@@ -282,6 +334,7 @@ export class TvView {
     // the next ayah to take effect, size included.
     this.elTrans.hidden = !this.showsTranslation(snap.settings);
     this.sizeStack(snap.settings);
+    this.fitTranslation(snap.settings);
     // The key and the gesture take the same step, so they name the same order.
     const order = `${cycleOrder(snap.settings.translationHome)
       .map((l) => TRANSLATIONS[l].label.toUpperCase()).join(', ')}, OFF`;

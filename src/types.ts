@@ -130,18 +130,51 @@ export interface TranslationMeta {
    * The reader still chooses ONE number; this is what it buys per language.
    */
   sizeScale: number;
+  /**
+   * The line-height the script is set at, as a multiple of its own font-size.
+   * Nastaliq needs far more leading than Latin -- see the `[data-lang='ur']`
+   * rules -- and that difference is not decoration: it is how much of the
+   * screen ONE line costs. Both views reserve room for a fixed number of LINES,
+   * so this is the number that turns the reader's size into that room, and CSS
+   * takes it from `--trans-lead` rather than repeating it.
+   */
+  lead: number;
+  /**
+   * How wide an average character of this script runs, as a fraction of the
+   * size it is set at. Measured off the real faces at the real widths: Latin
+   * averages about half its own size per character, nastaliq appreciably less
+   * because its letters join and ride over one another.
+   *
+   * Rounded UP from what the faces actually average, deliberately. It is an
+   * average and prose is ragged, so a line count built on it can be out either
+   * way -- and the two directions are not equally cheap. Too narrow and a verse
+   * is set a step larger than it should be and loses its last line off the
+   * bottom; too wide and it is set a step smaller than it had to be, and every
+   * word is still there. So it errs wide.
+   */
+  advance: number;
 }
 
 export const TRANSLATIONS: Readonly<Record<TranslationLang, TranslationMeta>> = {
   en: {
     dir: 'en-itani', label: 'English', credit: 'Talal Itani',
-    tag: 'en', rtl: false, sizeScale: 1,
+    tag: 'en', rtl: false, sizeScale: 1, lead: 1.55, advance: 0.52,
   },
   ur: {
     dir: 'ur-jalandhry', label: 'اردو', credit: 'Fateh Muhammad Jalandhry',
-    tag: 'ur', rtl: true, sizeScale: 1.45,
+    tag: 'ur', rtl: true, sizeScale: 1.45, lead: 2.1, advance: 0.42,
   },
 };
+
+/**
+ * The range the translation size may be set to, and the range it is FITTED
+ * within. Both, deliberately: the reader chooses a ceiling here, and a verse
+ * whose translation will not fit the band at that ceiling is set smaller --
+ * down to this same floor and no further, because below it the type stops being
+ * something anyone would read. See `fittedToBox`.
+ */
+export const TRANSLATION_SIZE_MIN = 12;
+export const TRANSLATION_SIZE_MAX = 40;
 
 export type Theme = 'light' | 'dark' | 'paper' | 'system';
 /** The three surfaces the header button cycles through; `system` is panel-only. */

@@ -9,9 +9,9 @@ import type { Celebration } from '../core/celebrate.ts';
 import { celebrationCopy, firstVisitChip } from '../core/celebrate.ts';
 import type { Snapshot } from '../core/state.ts';
 import { resolveTheme } from '../platform/theme.ts';
-import { TRANSLATIONS, type Settings, type Theme } from '../types.ts';
+import { TRANSLATION_SIZE_MIN, TRANSLATIONS, type Settings, type Theme } from '../types.ts';
 import { SIZE_MIN } from '../core/gesture.ts';
-import { fittedSize } from '../core/paginate.ts';
+import { fittedSize, fittedTranslationSize } from '../core/paginate.ts';
 import { pointsPerVerse } from '../core/scoring.ts';
 import { cycleOrder } from '../core/translation.ts';
 import { AutoLine } from './autoline.ts';
@@ -93,6 +93,10 @@ export class ReaderView {
   private readonly elAyah: HTMLElement;
   private readonly elAyahBox: HTMLElement;
   private readonly elTrans: HTMLElement;
+  /** The band the translation is set in; carries the clipped state for CSS. */
+  private readonly elTransBox: HTMLElement;
+  /** The last settings painted, so a rewrap can refit without a full repaint. */
+  private lastSettings: Settings | null = null;
   private readonly elLocator: HTMLElement;
   private elLocAyah!: HTMLElement;
   private elLocSurah!: HTMLButtonElement;
@@ -267,9 +271,21 @@ export class ReaderView {
     // argument is that there is nothing on it but the ayah.
     this.elAuto = el('span', { class: 'nav__auto', attrs: { role: 'status' } });
 
+    this.elTransBox = el('div', { class: 'translation' }, this.elTrans, this.elLocator);
+    // A window narrowed without being shortened rewraps the translation into
+    // more lines while the ayah frame -- the one thing the composition root
+    // watches -- does not move an inch, so nothing else would repaint for it
+    // and the size fitted at the old width would stand at the new one.
+    //
+    // The BAND, not the text inside it. The band's height is reserved from the
+    // size the reader chose and cannot be moved by the size the fit picks, so
+    // this cannot set off what it is listening for; watching the text would.
+    new ResizeObserver(() => {
+      if (this.lastSettings !== null) this.fitTranslation(this.lastSettings);
+    }).observe(this.elTransBox);
     this.surface = el('main', { class: 'reader' },
       this.elAyahBox,
-      el('div', { class: 'translation' }, this.elTrans, this.elLocator),
+      this.elTransBox,
       el('div', { class: 'nav' }, this.elPrev, this.elNext, this.elAuto),
       this.elHints,
       // Last in the column, so it sits on the bottom edge of the reading area
@@ -368,7 +384,6 @@ export class ReaderView {
 
     this.elLocTotal = el('span', { class: 'locator__total' });
     this.elLocPart = el('span', { class: 'locator__part', attrs: { hidden: true } });
-
     return el('div', { class: 'locator' },
       this.elLocSurah, ' · ', this.elLocAyah, this.elLocTotal, this.elLocPart);
   }
@@ -480,6 +495,7 @@ export class ReaderView {
     this.elTrans.textContent = surah.trans[index] ?? '';
     this.paintTranslationType(settings, surah.lang);
     this.elTrans.hidden = !this.showsTranslation(settings);
+    this.fitTranslation(settings);
 
     this.elAyah.dataset.font = settings.arabicFont;
     // Measured BEFORE the size goes on, and used for both the cap and the
@@ -527,13 +543,73 @@ export class ReaderView {
     this.elTrans.dataset.lang = lang;
     this.elTrans.dir = t.rtl ? 'rtl' : 'ltr';
     this.elTrans.lang = t.tag;
-    // Two numbers from one setting. `--trans-size` is what the type is set at,
-    // scaled for the script. `--trans-box` is what the box RESERVES, and is
-    // deliberately the unscaled figure: the room the translation takes from the
-    // ayah has to be the same in every language, or switching language would
-    // move the Arabic.
+    // Two numbers from one setting, and the band is built from their product.
+    // `--trans-size` is what the type is set at, scaled for the script.
     this.root.style.setProperty('--trans-size', `${settings.translationSize * t.sizeScale}px`);
-    this.root.style.setProperty('--trans-box', `${settings.translationSize}px`);
+    // The leading this script is set at, which is what CSS reserves the band's
+    // height in: a fixed number of LINES rather than a fixed number of pixels.
+    // It used to reserve `translationSize` px per line unscaled, which is a
+    // Latin line -- so Urdu, set 1.45x larger on 2.1 leading, cost twice that
+    // per line and the same band held four English lines but only two of Urdu.
+    // The reader picked a size, not a word count, and should get the same
+    // amount of TEXT either way.
+    this.root.style.setProperty('--trans-lead', String(t.lead));
+  }
+
+  /**
+   * The size the translation is actually SET at, which is the size the reader
+   * asked for or the largest smaller one that fits the band whole -- whichever
+   * comes first. Nothing here scrolls, and nothing is quietly cut off the
+   * bottom either: the type gives way instead.
+   *
+   * Two numbers, and they must not be confused. The band's HEIGHT comes from
+   * `--trans-size`, the size the reader chose, so it is the same for every
+   * verse and the ayah frame above it never moves. The band's TYPE comes from
+   * `--trans-fit`, which is per-verse. That is the one thing in this app whose
+   * size moves between ayat, and it moves for a reason the reader can see: a
+   * verse whose meaning takes more words is set a little smaller so that all of
+   * it is there. It cannot chase itself, because the box it is measured against
+   * was reserved before it was chosen -- see `fittedToBox`.
+   *
+   * The floor is the same size the panel will let the reader choose, because a
+   * size the app would not offer is not one it should impose. A translation
+   * that will not fit even at the floor is set at the floor and the soft edge
+   * in the stylesheet marks where it runs out; there is no size below this
+   * worth reading, and no scrollbar to reach the rest with by design.
+   */
+  private fitTranslation(settings: Settings): void {
+    this.lastSettings = settings;
+    const scale = TRANSLATIONS[this.paintedLang].sizeScale;
+    const want = settings.translationSize;
+    const t = TRANSLATIONS[this.paintedLang];
+    const wantPx = want * scale;
+    const setPx = (px: number) =>
+      this.root.style.setProperty('--trans-fit', `${px.toFixed(1)}px`);
+    if (this.elTrans.hidden) {
+      setPx(wantPx);
+      delete this.elTransBox.dataset.clipped;
+      return;
+    }
+    // The two numbers that are safe to measure: neither the column's width nor
+    // the band's height moves with the size chosen below -- the width is the
+    // window's, and the height is reserved from the size the READER asked for.
+    const boxW = this.elTrans.clientWidth;
+    const boxH = this.elTrans.clientHeight;
+    const chars = (this.elTrans.textContent ?? '').length;
+    const floorPx = Math.min(TRANSLATION_SIZE_MIN, want) * scale;
+    const px = fittedTranslationSize(wantPx, floorPx, chars, boxW, boxH, t.lead, t.advance);
+    setPx(px);
+    // Clipped when the floor is what stopped it, rather than the floor being
+    // what happened to fit: asked of the same arithmetic with the floor taken
+    // away, so the two cases cannot be confused.
+    //
+    // By a whole step, not by a hair. The estimate errs wide on purpose (see
+    // `advance`), so a verse that fits the floor exactly can come back a shade
+    // under it -- and a fade drawn over a translation with nothing missing is a
+    // worse lie than no fade at all.
+    const unfloored = fittedTranslationSize(wantPx, 1, chars, boxW, boxH, t.lead, t.advance);
+    if (unfloored + 1 < floorPx) this.elTransBox.dataset.clipped = 'true';
+    else delete this.elTransBox.dataset.clipped;
   }
 
   /** How many parts the ayah on screen is being read in; 1 when it fits. */
@@ -595,6 +671,7 @@ export class ReaderView {
     this.paintTheme(snap.settings.theme);
 
     this.elTrans.hidden = !this.showsTranslation(snap.settings);
+    this.fitTranslation(snap.settings);
     this.elHintT.textContent = `${cycleOrder(snap.settings.translationHome)
       .map((l) => TRANSLATIONS[l].label).join(' · ')} · off`;
     // The hints stop earning their place once the habit is underway.

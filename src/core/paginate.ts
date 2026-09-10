@@ -58,6 +58,52 @@ export function fittedSize(size: number, available: number | null, min: number):
 }
 
 /**
+ * The largest whole px at or under `want` at which `chars` characters of this
+ * script wrap into `boxW` x `boxH`. Never below `min`.
+ *
+ * Reckoned, not measured, and that is the whole point. The obvious version sets
+ * a size, reads the height back, and bisects -- and it cannot be trusted,
+ * because a browser flushes layout for a READ and a style write between two
+ * reads inside one task can be folded into a flush that has already happened.
+ * Every probe after the first then answers about the size before it. The
+ * symptom is not a crash but a confident wrong number: one verse shrunk to the
+ * floor though it fitted, the next left at full size though it did not, the
+ * answer depending on which verse happened to be on screen before it.
+ *
+ * `boxW` and `boxH` are still measured, and safely: neither moves with the size
+ * this returns. The width is the column, the height is reserved from the size
+ * the READER chose. Only the count of lines is reckoned, and only that needs to
+ * be, because it is the one quantity the type is allowed to move.
+ *
+ * The estimate is a line count from an average character width, so it is an
+ * estimate: prose is ragged, a long word can break a line early, and the answer
+ * can be out by a line either way. That is why the caller still marks a cut.
+ *
+ * Walked down rather than bisected. The range is the twenty-nine sizes the
+ * panel offers, the test is arithmetic, and walking gives the largest size that
+ * fits even where rounding makes `fits` non-monotone for a size or two -- which
+ * bisection would sail straight past.
+ */
+export function fittedTranslationSize(
+  want: number, min: number, chars: number, boxW: number, boxH: number,
+  lead: number, advance: number,
+): number {
+  // Nothing to fit, or nothing measured to fit it into. Leave the size alone
+  // rather than shrink to a floor on the strength of a zero.
+  if (chars <= 0 || boxW <= 0 || boxH <= 0 || advance <= 0 || lead <= 0) return want;
+  const fits = (px: number): boolean => {
+    const perLine = Math.max(1, Math.floor(boxW / (px * advance)));
+    return Math.ceil(chars / perLine) * px * lead <= boxH;
+  };
+  // The chosen size first, and unrounded: it is not a candidate to be searched
+  // for but the answer whenever it works, and a script scaled to 26.1px should
+  // be set at 26.1px rather than shaved to 26 for the sake of the loop below.
+  if (fits(want)) return want;
+  for (let px = Math.floor(want); px > min; px -= 1) if (fits(px)) return px;
+  return min;
+}
+
+/**
  * The fewest runs of whole words that each satisfy `fits`, in order. `fits` is
  * asked about candidate runs and must be monotone: if a run fits, every prefix
  * of it fits too. Height of wrapped text is, which is what lets each run be
