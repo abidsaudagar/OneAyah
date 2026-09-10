@@ -22,17 +22,23 @@ reading `part 1 of 1`.
 The block is about the WINDOW, not the pointer, and is no longer touch-gated.
 900x400 now gets 160px of frame and `part 1 of 20`, everything inside its box.
 
-### 2. Nothing on the reading screen scrolls, and the translation is set to fit
-The band used to clip silently; the first fix gave it a scroll and a `more`
-control, which was the wrong shape -- the reading screen should be still. Now
-the translation is SET SMALLER until it fits, down to the same 12px floor the
-panel offers, and `overflow` is `hidden` everywhere on the reading surface.
-Zooming past what fits simply stops, which is the behaviour that was asked for.
+### 2. The band scrolls, and its last line fades to say so
+The band used to clip silently. Setting the type SMALLER until it fit was tried
+first and taken back out: it meant that raising the translation size did nothing
+on exactly the verses where raising it was the point, which reads as the text
+being hidden all over again. The type is now always the size the reader chose.
 
-Across all 6236 verses: **English 97.6%** at the chosen size, 2.4% set smaller
-and whole, 1 verse cut. **Urdu 86.1%** at the chosen size, 13.6% set smaller and
-whole, 14 verses cut. Before any of this, a long Urdu verse showed 2 of its 16
-lines with nothing to say so.
+What will not fit scrolls, and the last line fades away rather than stopping
+dead -- which says both of the things a reader needs: that there is more of
+this, and that the band will move if they ask it to. The fade follows the
+scroll: bottom edge while there is more below, top edge once the end is in view,
+both while in the middle.
+
+At the default size on a 1440x900 window it appears on 1.6% of English verses
+(97 of 6236, worst 3.2x the band) and 9.5% of Urdu (592, worst 4x). Before any
+of this, a long Urdu verse showed 2 of its 16 lines with nothing to say so; the
+band now reserves a fixed number of LINES per script rather than a fixed number
+of pixels, so Urdu gets the same four English gets.
 
 ### 3. Fullscreen kept a split it measured before it had been laid out
 *Pre-existing, and the more interesting half of it is item 12 below.*
@@ -47,23 +53,29 @@ first repaint waits two animation frames.
 
 ## Bugs
 
-### 4. Auto-advance and the fifteen verses that still get cut
-`dwellMs` counts the translation's words, so the hold is generous, and now that
-the type gives way instead of the text there is nothing to scroll while the
-timer runs. What remains is the fifteen verses that do not fit even at the
-floor: auto-advance will turn past the part of those the reader cannot see.
+### 4. Auto-advance runs while the reader is still scrolling
+`dwellMs` counts the translation's words, so the hold is generous -- but on the
+one verse in ten where the Urdu overruns its band, the reader has to scroll it
+WHILE the timer runs, and the turn puts the next translation back at line one.
+Either hold longer when the band has more in it, or do not turn until it has
+been read to the end.
 
-### 5. Urdu is charged the English reading rate
+### 5. Nothing scrolls the translation in fullscreen without a pointer
+The fading line says there is more; a wheel and a finger can reach it, and a
+keyboard and a TV remote -- the two inputs fullscreen exists for -- cannot. The
+arrows are spoken for: they move verses.
+
+### 6. Urdu is charged the English reading rate
 [`src/core/dwell.ts`](src/core/dwell.ts) bills `ENGLISH_MS_PER_WORD` for both
 languages. Urdu carries more per word, so its dwell is probably short.
 
-### 6. Part counts run away at large Arabic sizes
+### 7. Part counts run away at large Arabic sizes
 128px Arabic on a 1280px screen makes 2:282 `PART 1 OF 35` in fullscreen and
 `part 1 of 141` in a small window -- two or three words a screen. Nothing warns
 the reader that the size they just chose turned one verse into a hundred
 screenfuls.
 
-### 7. One text size, every form factor
+### 8. One text size, every form factor
 `arabicSize` is a single stored number, so a reader who narrows a desktop window
 -- or opens the app on a phone in the same browser profile -- keeps 128px and
 gets ninety parts. The "start a phone on 45px" commit only reaches a FRESH
@@ -71,27 +83,18 @@ install.
 
 ## Improvements
 
-### 8. The translation-size stepper now shows a ceiling, not a size
-The panel says `26 px`, and on a long verse the type is set at 20px. That was
-already a small lie (the number moves by 1 or 2 with no visible pattern, because
-the setting steps by 1 and is multiplied by 1.45); it is a larger one now that
-the size is a ceiling rather than the size. The row should say so.
+### 9. The translation-size stepper lies about its step
+The panel shows the SCALED px, so one press of `+` moves Urdu 26 -> 28 -> 29 ->
+30. The setting steps by 1 and is then multiplied by 1.45, so the number the
+reader is watching moves by one or two with no pattern they can see.
 
-### 9. The soft edge smudges under nastaliq
-On the fifteen cut verses, descenders from the line below still show through the
-fade, which reads as a stain rather than a cut. Clipping the box to whole lines
-would be cleaner.
+### 10. The soft edge smudges under nastaliq
+Descenders from the line below show through the fade, which reads as a stain
+rather than a soft edge. Clipping the box to whole lines would be cleaner.
 
-### 10. The nav arrows are nearly invisible at rest
+### 11. The nav arrows are nearly invisible at rest
 Very low contrast on the paper ground, and no affordance until the pointer is
 already on them.
-
-### 11. The fit is an estimate, and could be a measurement
-`fittedTranslationSize` reckons a line count from an average character width per
-script (`advance` in `TRANSLATIONS`). It errs wide on purpose, so it sometimes
-sets a verse one step smaller than it had to. A once-per-face calibration pass
--- measuring real strings at real widths and solving for `advance` -- would
-tighten it. See item 12 for why it cannot simply measure and bisect.
 
 ### 12. A task gets one layout flush, so measure-and-adjust loops lie
 Worth knowing before writing another one. In Chrome 152, writing a style and
@@ -99,11 +102,12 @@ reading a layout property repeatedly inside ONE task does not re-flush: the
 first read flushes, and every later write in that task is invisible to every
 later read. A synthetic `<div>` with a direct inline `font-size` reports the
 same `offsetHeight` for 30px, 20px and 10px. Text mutations DO re-flush, which
-is why `Pager` -- which writes `textContent` between reads -- works, and why the
-first shot at fitting the translation, which only wrote styles, produced
-confident wrong answers that depended on the previous verse.
+is why `Pager` -- which writes `textContent` between reads -- works, and why an
+attempt at fitting the translation by writing sizes and measuring them produced
+confident wrong answers that depended on the previous verse. That approach is
+gone; the entry above is kept because the trap is not.
 
 Anything that needs to try several presentations and pick one must either
-reckon it (`fittedSize`, `fittedTranslationSize`) or spread the probes across
-frames. Measuring quantities that do not move with the thing being chosen --
-the band's width and height, say -- is always safe.
+reckon it, the way `fittedSize` does for the Arabic, or spread the probes across
+frames. A SINGLE measurement is always sound -- which is all the fade below the
+translation needs, and why it is a scroll state rather than a fitted size.
