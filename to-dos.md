@@ -40,7 +40,19 @@ of this, a long Urdu verse showed 2 of its 16 lines with nothing to say so; the
 band now reserves a fixed number of LINES per script rather than a fixed number
 of pixels, so Urdu gets the same four English gets.
 
-### 3. Fullscreen kept a split it measured before it had been laid out
+### 3. The fullscreen tap halves were sitting on top of the translation
+The overlay's tap zones are absolutely placed, so they paint over the stack
+whatever the source order says. On a 390px phone the translation runs 43px to
+347px while the zones cover 0-117 and 273-390: six tenths of the width a thumb
+would reach for. A swipe there turned the page instead of scrolling -- which is
+the one outcome that loses the translation for good, and exactly what the fading
+line had just promised was reachable.
+
+The translation now takes its own touches back when it has something to scroll
+to, and only then: one that fits is better left as somewhere a thumb can tap to
+turn the page, which on a phone in fullscreen is most of what a thumb is for.
+
+### 4. Fullscreen kept a split it measured before it had been laid out
 *Pre-existing, and the more interesting half of it is item 12 below.*
 
 `enterFullscreen` appended the overlay and painted it in the same task, so the
@@ -53,29 +65,29 @@ first repaint waits two animation frames.
 
 ## Bugs
 
-### 4. Auto-advance runs while the reader is still scrolling
+### 5. Auto-advance runs while the reader is still scrolling
 `dwellMs` counts the translation's words, so the hold is generous -- but on the
 one verse in ten where the Urdu overruns its band, the reader has to scroll it
 WHILE the timer runs, and the turn puts the next translation back at line one.
 Either hold longer when the band has more in it, or do not turn until it has
 been read to the end.
 
-### 5. Nothing scrolls the translation in fullscreen without a pointer
-The fading line says there is more; a wheel and a finger can reach it, and a
-keyboard and a TV remote -- the two inputs fullscreen exists for -- cannot. The
-arrows are spoken for: they move verses.
+### 6. Nothing scrolls the translation in fullscreen without a wheel or a thumb
+The fading line says there is more, and a keyboard and a TV remote -- the two
+inputs fullscreen exists for -- still cannot reach it. The arrows are spoken
+for: they move verses.
 
-### 6. Urdu is charged the English reading rate
+### 7. Urdu is charged the English reading rate
 [`src/core/dwell.ts`](src/core/dwell.ts) bills `ENGLISH_MS_PER_WORD` for both
 languages. Urdu carries more per word, so its dwell is probably short.
 
-### 7. Part counts run away at large Arabic sizes
+### 8. Part counts run away at large Arabic sizes
 128px Arabic on a 1280px screen makes 2:282 `PART 1 OF 35` in fullscreen and
 `part 1 of 141` in a small window -- two or three words a screen. Nothing warns
 the reader that the size they just chose turned one verse into a hundred
 screenfuls.
 
-### 8. One text size, every form factor
+### 9. One text size, every form factor
 `arabicSize` is a single stored number, so a reader who narrows a desktop window
 -- or opens the app on a phone in the same browser profile -- keeps 128px and
 gets ninety parts. The "start a phone on 45px" commit only reaches a FRESH
@@ -83,20 +95,20 @@ install.
 
 ## Improvements
 
-### 9. The translation-size stepper lies about its step
+### 10. The translation-size stepper lies about its step
 The panel shows the SCALED px, so one press of `+` moves Urdu 26 -> 28 -> 29 ->
 30. The setting steps by 1 and is then multiplied by 1.45, so the number the
 reader is watching moves by one or two with no pattern they can see.
 
-### 10. The soft edge smudges under nastaliq
+### 11. The soft edge smudges under nastaliq
 Descenders from the line below show through the fade, which reads as a stain
 rather than a soft edge. Clipping the box to whole lines would be cleaner.
 
-### 11. The nav arrows are nearly invisible at rest
+### 12. The nav arrows are nearly invisible at rest
 Very low contrast on the paper ground, and no affordance until the pointer is
 already on them.
 
-### 12. A task gets one layout flush, so measure-and-adjust loops lie
+### 13. A task gets one layout flush, so measure-and-adjust loops lie
 Worth knowing before writing another one. In Chrome 152, writing a style and
 reading a layout property repeatedly inside ONE task does not re-flush: the
 first read flushes, and every later write in that task is invisible to every
