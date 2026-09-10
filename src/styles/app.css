@@ -867,6 +867,18 @@ a.btn--primary { color: var(--surface); }
 .tv__tap { position: absolute; top: 0; bottom: 0; width: 30%; }
 .tv__tap--prev { left: 0; }
 .tv__tap--next { right: 0; }
+/* The tap halves are absolutely placed, so they paint OVER the stack whatever
+   the source order says -- and on a 390px phone the translation runs 43px to
+   347px while they cover 0-117 and 273-390. Six tenths of the width a thumb
+   would reach for belonged to them: a swipe there turned the page rather than
+   scrolling, which is the one outcome that loses the translation for good, and
+   it is exactly what the fading line had just promised was reachable.
+
+   So when there is something to scroll to, the translation takes its own
+   touches back. Only then: a translation that fits has nothing to swipe for and
+   is better left as somewhere a thumb can tap to turn the page, which on a
+   phone in fullscreen is most of what a thumb is for. */
+.tv__stack:not([data-more='none']) .tv__translation { position: relative; z-index: 1; }
 
 /* ------------------------------------------------------------------ responsive */
 
