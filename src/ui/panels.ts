@@ -15,7 +15,7 @@ import { unlockProgress } from '../core/unlock.ts';
 import { cycleOrder } from '../core/translation.ts';
 import {
   RUNGS, SCRIPT_OF, SESSION_LABELS, SESSION_LENGTHS, THEMES, TRANSLATION_LANGS,
-  TRANSLATIONS, UNLOCK_DAYS,
+  TRANSLATION_SIZE_MAX, TRANSLATION_SIZE_MIN, TRANSLATIONS, UNLOCK_DAYS,
   type Accent, type ArabicFont, type Rung, type SessionLen, type Settings,
 } from '../types.ts';
 import { arabicWordsPerMinute, stepSpeed } from '../core/dwell.ts';
@@ -28,6 +28,16 @@ let openPanel: PanelHandle | null = null;
 export interface ModalOptions {
   /** Anchor the panel to a screen edge instead of centring it. */
   side?: 'left' | 'right';
+  /**
+   * Run once the panel is in the document, with the element `build` returned.
+   * The one thing a panel cannot do for itself: scroll position and focus are
+   * only settable on an element the layout has actually happened for, and
+   * `build` runs before that. A panel that re-renders itself uses this to put
+   * back what the rebuild threw away.
+   *
+   * It runs AFTER the default focus below, so it can override it.
+   */
+  mounted?: (panel: HTMLElement) => void;
 }
 
 /** Opens a modal, closing whatever was open. Esc and scrim-click dismiss it. */
@@ -57,9 +67,11 @@ export function openModal(
   scrim.addEventListener('pointerdown', (e) => { if (e.target === scrim) close(); });
   document.addEventListener('keydown', onKey, true);
 
-  scrim.append(build(close));
+  const panel = build(close);
+  scrim.append(panel);
   document.body.append(scrim);
   scrim.querySelector<HTMLElement>('button, input, [tabindex]')?.focus();
+  opts.mounted?.(panel);
 
   openPanel = handle;
   return handle;
@@ -201,28 +213,84 @@ export interface AutoAdvanceControl {
   setPlaying(on: boolean): void;
 }
 
+/**
+ * Where the settings panel was when it last rebuilt itself. Every choice in
+ * here re-renders the whole panel, which is cheap and correct -- but a rebuilt
+ * panel is a NEW element, scrolled to the top with focus on its first button.
+ * So pressing + on `Translation size`, which lives well down the panel, threw
+ * the reader back to `ARABIC SCRIPT` and left them hunting for the button they
+ * had just pressed. A size is chosen by pressing that button several times,
+ * which made the one control in here that is used repeatedly the one control
+ * that ran away between presses.
+ */
+interface PanelPlace {
+  /** How far down the panel was scrolled. */
+  scroll: number;
+  /** `data-k` of the control that was last pressed, so it can be pressed again. */
+  focus?: string;
+}
+
+/** The `data-k` of whatever control an event landed on, if it landed on one. */
+const keyOfTarget = (e: Event): string | undefined =>
+  (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-k]')?.dataset.k;
+
 export function openSettings(
   settings: Settings,
   patch: (p: Partial<Settings>) => void,
   showAbout: () => void,
   showFeedback: () => void,
   auto: AutoAdvanceControl,
+  place?: PanelPlace,
 ): void {
+  let panel: HTMLElement | null = null;
+  /**
+   * The control that is about to be pressed. It cannot be read off
+   * `document.activeElement` when the panel rebuilds: Safari and Firefox on
+   * macOS do not focus a button when it is clicked, so on those the active
+   * element during the handler is still the panel.
+   */
+  let pressed: string | undefined;
+
   openModal((close) => {
-    const rerender = () => { close(); openSettings(settings, patch, showAbout, showFeedback, auto); };
+    const rerender = () => {
+      // Read BEFORE the close: `close` takes the panel out of the document, and
+      // a detached element reports a scroll position of zero -- which is the
+      // very thing this is here to stop happening.
+      const at: PanelPlace = { scroll: panel?.scrollTop ?? 0, focus: pressed };
+      close();
+      openSettings(settings, patch, showAbout, showFeedback, auto, at);
+    };
     const set = (p: Partial<Settings>) => { Object.assign(settings, p); patch(p); rerender(); };
 
-    const stepper = (label: string, sub: string, dec: () => void, inc: () => void) =>
+    const stepper = (key: string, label: string, sub: string, dec: () => void, inc: () => void) =>
       el('div', { class: 'row' },
         el('div', {}, el('div', { class: 'row__label', text: label }), el('div', { class: 'row__sub', text: sub })),
         el('div', { class: 'stepper' },
-          el('button', { text: '−', attrs: { 'aria-label': `Decrease ${label}` }, on: { click: dec } }),
-          el('button', { text: '+', attrs: { 'aria-label': `Increase ${label}` }, on: { click: inc } }),
+          el('button', {
+            text: '−',
+            attrs: { 'aria-label': `Decrease ${label}`, 'data-k': `${key}-dec` },
+            on: { click: dec },
+          }),
+          el('button', {
+            text: '+',
+            attrs: { 'aria-label': `Increase ${label}`, 'data-k': `${key}-inc` },
+            on: { click: inc },
+          }),
         ),
       );
 
-    return el('div', {
-      class: 'side side--left side--scroll', attrs: { role: 'dialog', 'aria-label': 'Settings' },
+    panel = el('div', {
+      class: 'side side--left side--scroll',
+      attrs: { role: 'dialog', 'aria-label': 'Settings' },
+      // Both of the events that PRECEDE a click, because a click itself is too
+      // late: the button's own handler rebuilds the panel before the click has
+      // finished bubbling up to here. A pointer press covers mouse and touch;
+      // a key press covers Enter and Space on a focused button, which produce
+      // a click with no pointer event in front of it.
+      on: {
+        pointerdown: (e: Event) => { pressed = keyOfTarget(e); },
+        keydown: (e: Event) => { pressed = keyOfTarget(e); },
+      },
     },
       el('h2', { class: 'panel__title', style: 'margin-bottom:20px', text: 'Reading settings' }),
 
@@ -241,7 +309,7 @@ export function openSettings(
         el('div', { class: 'font-opt__note', text: f.note }),
       ))),
 
-      stepper('Arabic size', `${settings.arabicSize} px · or press [ and ]`,
+      stepper('arabic-size', 'Arabic size', `${settings.arabicSize} px · or press [ and ]`,
         () => set({ arabicSize: Math.max(24, settings.arabicSize - 6) }),
         () => set({ arabicSize: Math.min(200, settings.arabicSize + 6) })),
       el('div', { class: 'panel__section', text: 'TRANSLATION' }),
@@ -281,11 +349,11 @@ export function openSettings(
       // The px shown is what actually lands on the glyphs, scale included, so a
       // reader who switches to Urdu and sees the type grow can find the number
       // that grew. The face is what is fixed; the size is theirs.
-      stepper('Translation size',
+      stepper('trans-size', 'Translation size',
         `${Math.round(settings.translationSize
           * TRANSLATIONS[settings.translationLang].sizeScale)} px · the face is fixed`,
-        () => set({ translationSize: Math.max(12, settings.translationSize - 1) }),
-        () => set({ translationSize: Math.min(40, settings.translationSize + 1) })),
+        () => set({ translationSize: Math.max(TRANSLATION_SIZE_MIN, settings.translationSize - 1) }),
+        () => set({ translationSize: Math.min(TRANSLATION_SIZE_MAX, settings.translationSize + 1) })),
 
       el('div', { class: 'panel__section', text: 'SESSION LENGTH' }),
       el('div', { class: 'opts' }, ...SESSION_LENGTHS.map((len: SessionLen) => el('button', {
@@ -311,7 +379,7 @@ export function openSettings(
             text: 'ON', attrs: { 'aria-selected': auto.isPlaying() },
             on: { click: () => { auto.setPlaying(true); rerender(); } },
           }))),
-      stepper('Reading speed',
+      stepper('speed', 'Reading speed',
         `${speedText(settings.autoAdvanceSpeed)} · about ${
           arabicWordsPerMinute(settings.autoAdvanceSpeed)} words a minute`,
         () => set({ autoAdvanceSpeed: stepSpeed(settings.autoAdvanceSpeed, -1) }),
@@ -367,7 +435,20 @@ export function openSettings(
         el('button', { class: 'btn btn--primary', text: 'DONE', on: { click: close } }),
       ),
     );
-  }, { side: 'left' });
+    return panel;
+  }, {
+    side: 'left',
+    // Put back where the reader was, and what they were pressing. Focus first
+    // and without its own scrolling, then the scroll: focusing scrolls the
+    // element into view, and doing it second would fight the line under it.
+    mounted: (root) => {
+      if (place === undefined) return;
+      if (place.focus !== undefined) {
+        root.querySelector<HTMLElement>(`[data-k="${place.focus}"]`)?.focus({ preventScroll: true });
+      }
+      root.scrollTop = place.scroll;
+    },
+  });
 }
 
 /* ------------------------------------------------------- local-data warning */

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { ARABIC_LINE, fittedSize, paginate } from '../src/core/paginate.ts';
+import { ARABIC_LINE, fittedSize, fittedTranslationSize, paginate } from '../src/core/paginate.ts';
 
 /** Stands in for measured height: a run fits while it is within `budget` characters. */
 const upTo = (budget: number) => (run: string) => run.length <= budget;
@@ -94,6 +94,75 @@ describe('fittedSize', () => {
     for (const available of [40, 90, 200, 640]) {
       const once = fittedSize(128, available, MIN);
       assert.equal(fittedSize(once, available, MIN), once);
+    }
+  });
+});
+
+describe('fittedTranslationSize', () => {
+  /** English-ish: half-width characters on 1.55 leading, in an 800x120 box. */
+  const en = (chars: number, want = 18, min = 12, boxH = 120) =>
+    fittedTranslationSize(want, min, chars, 800, boxH, 1.55, 0.5);
+
+  it('leaves the chosen size alone when the text already fits', () => {
+    // 40 chars is one line at 18px: 27.9px of a 120px box.
+    assert.equal(en(40), 18);
+  });
+
+  it('gives way a step at a time as the verse gets longer', () => {
+    const sizes = [200, 400, 700, 1000, 1600].map((n) => en(n));
+    for (let i = 1; i < sizes.length; i += 1) {
+      assert.ok(sizes[i]! <= sizes[i - 1]!, `${sizes}`);
+    }
+    assert.ok(sizes[0]! > sizes[sizes.length - 1]!, `${sizes}`);
+  });
+
+  it('never returns more than the reader asked for', () => {
+    for (const chars of [1, 40, 400, 4000]) assert.ok(en(chars) <= 18);
+  });
+
+  it('never returns less than the floor, however long the verse', () => {
+    assert.equal(en(100_000), 12);
+    assert.ok(en(4000) >= 12);
+  });
+
+  it('what it returns actually fits, by its own arithmetic', () => {
+    for (const chars of [200, 400, 700, 1000]) {
+      const px = en(chars);
+      if (px === 12) continue;                       // the floor may not fit; that is the cut
+      const perLine = Math.floor(800 / (px * 0.5));
+      assert.ok(Math.ceil(chars / perLine) * px * 1.55 <= 120, `${chars} at ${px}`);
+    }
+  });
+
+  it('and one step larger would not', () => {
+    for (const chars of [200, 400, 700, 1000]) {
+      const px = en(chars);
+      if (px === 18) continue;
+      const perLine = Math.floor(800 / ((px + 1) * 0.5));
+      assert.ok(Math.ceil(chars / perLine) * (px + 1) * 1.55 > 120, `${chars} at ${px + 1}`);
+    }
+  });
+
+  it('a tighter script needs less room for the same characters', () => {
+    const latin = fittedTranslationSize(18, 12, 600, 800, 120, 1.55, 0.5);
+    const wider = fittedTranslationSize(18, 12, 600, 800, 120, 1.55, 0.7);
+    assert.ok(wider <= latin, `${wider} vs ${latin}`);
+  });
+
+  it('leaves the size alone when there is nothing measured yet', () => {
+    assert.equal(fittedTranslationSize(18, 12, 500, 0, 120, 1.55, 0.5), 18);
+    assert.equal(fittedTranslationSize(18, 12, 500, 800, 0, 1.55, 0.5), 18);
+    assert.equal(fittedTranslationSize(18, 12, 0, 800, 120, 1.55, 0.5), 18);
+  });
+
+  it('a taller band buys back size', () => {
+    assert.ok(en(800, 18, 12, 240) >= en(800, 18, 12, 120));
+  });
+
+  it('settles in one pass -- refitting at the size it returned changes nothing', () => {
+    for (const chars of [300, 600, 900]) {
+      const once = en(chars);
+      assert.equal(en(chars, once), once);
     }
   });
 });

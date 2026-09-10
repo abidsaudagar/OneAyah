@@ -381,6 +381,24 @@ async function enterFullscreen(): Promise<void> {
   // different number of parts in it -- and a different part is a different
   // dwell. Re-armed rather than carried across.
   armAuto();
+  // And once more once the overlay has actually been rendered, because
+  // everything above ran in the task that BUILT it. A subtree appended and
+  // measured inside one task has not been through a style pass: the split above
+  // measured an ayah still set in the body's 14px, at which size the whole of
+  // 2:282 comfortably "fits" a TV screen -- so it was painted unsplit, nine
+  // thousand pixels tall, as PART 1 OF 1. Forcing a reflow does not fix it;
+  // only a frame does.
+  //
+  // TWO frames, not one. A `requestAnimationFrame` callback runs at the START
+  // of a frame, before that frame's style and layout, so a repaint there reads
+  // the same stale type the first one did. The second callback is the first one
+  // that runs after the overlay has been through the lifecycle.
+  //
+  // The repaint costs nothing when the first split was already right: the pager
+  // keys its cache on the size it measured at, so it hands back the same pages.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (tv !== null) paintVerse(false);
+  }));
 
   try {
     // Must be called synchronously enough to still count as a user gesture.
