@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { Coverage } from '../src/core/coverage.ts';
 import type { OffsetFn } from '../src/core/day.ts';
-import { initialState, reduce, select, type Action } from '../src/core/state.ts';
+import {
+  DEFAULT_SETTINGS, PHONE_ARABIC_SIZE, initialState, reduce, select, type Action,
+} from '../src/core/state.ts';
 import type { PersistedState, Rung } from '../src/types.ts';
 
 const utc: OffsetFn = () => 0;
@@ -149,5 +151,24 @@ describe('state reducer', () => {
   it('clamps an out-of-range rung rather than trusting it', () => {
     const s = initialState(at(2026, 9, 4), utc);
     assert.equal(reduce(s, { t: 'setRung', rung: 30 as Rung, nowMs: at(2026, 9, 4) }, utc).goal, 5);
+  });
+
+  describe('the size a fresh install starts on', () => {
+    it('takes the desktop default when the shell seeds nothing', () => {
+      const s = initialState(at(2026, 9, 4), utc);
+      assert.equal(s.settings.arabicSize, DEFAULT_SETTINGS.arabicSize);
+    });
+
+    it('takes the phone size when the shell seeds one', () => {
+      const s = initialState(at(2026, 9, 4), utc, { arabicSize: PHONE_ARABIC_SIZE });
+      assert.equal(s.settings.arabicSize, 45);
+    });
+
+    it('leaves every setting the seed does not name alone', () => {
+      const s = initialState(at(2026, 9, 4), utc, { arabicSize: PHONE_ARABIC_SIZE });
+      assert.equal(s.settings.arabicFont, DEFAULT_SETTINGS.arabicFont);
+      assert.equal(s.settings.translationSize, DEFAULT_SETTINGS.translationSize);
+      assert.equal(s.settings.theme, DEFAULT_SETTINGS.theme);
+    });
   });
 });

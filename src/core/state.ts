@@ -14,6 +14,18 @@ import { multiplier, scoreDay } from './scoring.ts';
 import { currentStreak, daysRead, daysSinceStart, longestStreak, type DayMap } from './streak.ts';
 import { recomputeUnlockedMax, selectableRungs } from './unlock.ts';
 
+/**
+ * The Arabic size a phone starts on. A phone's reading column is a fraction of
+ * a desktop's, and 128px there is a size the reader only ever meets already
+ * shrunk to fit -- which makes the stored number a fiction and the first pinch
+ * a correction rather than a choice. 45px is what the ayah actually renders at,
+ * so the setting and the screen agree from the first launch.
+ *
+ * It applies to a FRESH install only: a size already on disk was either chosen
+ * or lived with, and neither is ours to overwrite.
+ */
+export const PHONE_ARABIC_SIZE = 45;
+
 export const DEFAULT_SETTINGS: Settings = {
   arabicFont: 'al-qalam-indopak',
   showTranslation: false,
@@ -27,7 +39,11 @@ export const DEFAULT_SETTINGS: Settings = {
   autoAdvanceSpeed: DEFAULT_AUTO_SPEED,
 };
 
-export function initialState(nowMs: number, offset?: OffsetFn): PersistedState {
+export function initialState(
+  nowMs: number,
+  offset?: OffsetFn,
+  settings: Partial<Settings> = {},
+): PersistedState {
   const day = dayKeyOf(nowMs, offset, DAY_ROLLOVER_HOUR);
   return {
     version: 1,
@@ -37,7 +53,7 @@ export function initialState(nowMs: number, offset?: OffsetFn): PersistedState {
     position: { surah: 1, ayah: 1 },
     places: { 1: 1 },
     totals: { points: 0, verses: 0, seconds: 0 },
-    settings: { ...DEFAULT_SETTINGS },
+    settings: { ...DEFAULT_SETTINGS, ...settings },
     credited: { day, ids: [] },
     coverage: Coverage.empty().toBase64(),
     noticeDismissed: false,

@@ -1,6 +1,7 @@
 /** The one mutable cell in the app. Everything else reads a snapshot. */
-import { reduce, select, type Action, type Snapshot } from '../core/state.ts';
-import { createPersistence, type Persistence } from '../store/persist.ts';
+import { PHONE_ARABIC_SIZE, reduce, select, type Action, type Snapshot } from '../core/state.ts';
+import { isPhone } from '../platform/device.ts';
+import { createPersistence, STORAGE_KEY, type Persistence } from '../store/persist.ts';
 import type { PersistedState } from '../types.ts';
 
 export interface AppStore {
@@ -17,7 +18,12 @@ export interface AppStore {
 const IMMEDIATE = new Set<Action['t']>(['creditVerse', 'setRung', 'replaceState']);
 const DEBOUNCE_MS = 250;
 
-export function createAppStore(persistence: Persistence = createPersistence()): AppStore {
+/** The settings a first launch starts on that the pure default cannot know. */
+const freshSettings = () => (isPhone() ? { arabicSize: PHONE_ARABIC_SIZE } : {});
+
+export function createAppStore(
+  persistence: Persistence = createPersistence(STORAGE_KEY, freshSettings()),
+): AppStore {
   let state = persistence.load(Date.now());
   let degraded = !persistence.store.available;
   const subs = new Set<(s: Snapshot, state: PersistedState) => void>();

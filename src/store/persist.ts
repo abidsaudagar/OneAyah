@@ -122,13 +122,21 @@ export interface Persistence {
   readonly store: Store;
 }
 
-export function createPersistence(key = STORAGE_KEY): Persistence {
+/**
+ * `fresh` seeds the settings of a state that is being started from nothing --
+ * a first launch, or a blob too corrupt to repair. It never reaches a state
+ * read back off disk, so a size the reader already has survives untouched.
+ */
+export function createPersistence(
+  key = STORAGE_KEY,
+  fresh: Partial<Settings> = {},
+): Persistence {
   const store = createStore(key);
   return {
     store,
     load(nowMs) {
       const blob = store.read();
-      if (blob === null) return initialState(nowMs);
+      if (blob === null) return initialState(nowMs, undefined, fresh);
       try {
         const repaired = repair(JSON.parse(blob), nowMs);
         if (repaired) return repaired;
@@ -136,7 +144,7 @@ export function createPersistence(key = STORAGE_KEY): Persistence {
       } catch {
         quarantine(key, blob, nowMs);
       }
-      return initialState(nowMs);
+      return initialState(nowMs, undefined, fresh);
     },
     save: (s) => store.write(JSON.stringify(s)),
   };
