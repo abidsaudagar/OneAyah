@@ -31,7 +31,16 @@ export class Pager {
    * browser paints once, at the end, and none of the trial runs is ever seen.
    */
   split(probe: HTMLElement, text: string, available: number): string[] {
-    const style = `${probe.style.fontSize}|${probe.dataset.font}|${probe.clientWidth}`;
+    // The COMPUTED size, not the inline one. The reader sets `style.fontSize`
+    // on the ayah itself, so the inline value spoke for it -- but fullscreen
+    // sizes the STACK and lets the ayah inherit `1em`, so `probe.style.fontSize`
+    // is the empty string there whatever the reader has chosen. That left the
+    // key blind to the one number a split depends on most: `[` and `]` could
+    // not re-split in fullscreen, and a first split measured before the overlay
+    // had been through a style pass was cached under a key no later paint could
+    // miss -- which is what kept a whole unsplit ayah on screen. See the double
+    // `requestAnimationFrame` in the composition root for the other half.
+    const style = `${getComputedStyle(probe).fontSize}|${probe.dataset.font}|${probe.clientWidth}`;
     const key = keyOf(text, available, style);
     if (key === this.key) return this.pages;
 
