@@ -139,30 +139,16 @@ export interface TranslationMeta {
    * takes it from `--trans-lead` rather than repeating it.
    */
   lead: number;
-  /**
-   * How wide an average character of this script runs, as a fraction of the
-   * size it is set at. Measured off the real faces at the real widths: Latin
-   * averages about half its own size per character, nastaliq appreciably less
-   * because its letters join and ride over one another.
-   *
-   * Rounded UP from what the faces actually average, deliberately. It is an
-   * average and prose is ragged, so a line count built on it can be out either
-   * way -- and the two directions are not equally cheap. Too narrow and a verse
-   * is set a step larger than it should be and loses its last line off the
-   * bottom; too wide and it is set a step smaller than it had to be, and every
-   * word is still there. So it errs wide.
-   */
-  advance: number;
 }
 
 export const TRANSLATIONS: Readonly<Record<TranslationLang, TranslationMeta>> = {
   en: {
     dir: 'en-itani', label: 'English', credit: 'Talal Itani',
-    tag: 'en', rtl: false, sizeScale: 1, lead: 1.55, advance: 0.52,
+    tag: 'en', rtl: false, sizeScale: 1, lead: 1.55,
   },
   ur: {
     dir: 'ur-jalandhry', label: 'اردو', credit: 'Fateh Muhammad Jalandhry',
-    tag: 'ur', rtl: true, sizeScale: 1.45, lead: 2.1, advance: 0.42,
+    tag: 'ur', rtl: true, sizeScale: 1.45, lead: 2.1,
   },
 };
 

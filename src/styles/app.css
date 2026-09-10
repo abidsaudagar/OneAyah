@@ -260,9 +260,10 @@ button {
    four lines of it plus the locator line under them. The ayah is sized against
    what this leaves, so if this grew with the English then the frame -- and the
    number of parts a long ayah is read in -- would change from ayah to ayah. A
-   translation longer than four lines is SET SMALLER until it fits, rather than
-   scrolled to -- nothing on this screen scrolls. Capped against the window so a
-   large translation size cannot crowd the ayah out on a laptop. */
+   translation longer than four lines scrolls inside the box instead, whole and
+   still one translation -- and its last line fades, which is what says so.
+   Capped against the window so a large translation size cannot crowd the ayah
+   out on a laptop. */
 .translation {
   flex: none;
   /* FOUR LINES of whatever is in the box, which is why both halves of a line
@@ -289,30 +290,27 @@ button {
 .translation:has(> .translation__text[hidden]) { height: auto; }
 .translation__text {
   color: var(--secondary);
-  /* `--trans-fit`, not `--trans-size`. The band's HEIGHT is reserved from the
-     size the reader chose, so it is the same for every verse and the ayah frame
-     above it never moves. The TYPE is whatever fits that band, which is the
-     chosen size for almost every verse and a little under it for the longest.
-     The fallback is the chosen size, for the frame before the first fit. */
-  font-size: var(--trans-fit, var(--trans-size, 18px));
+  /* The size the reader chose, always. Setting it smaller to make a long verse
+     fit was tried and taken back out: it meant that raising the size did
+     nothing on the verses where raising it was the whole point. The band
+     scrolls instead, and says so. */
+  font-size: var(--trans-size, 18px);
   max-width: 820px; margin: 0 auto;
   /* Centred in the room above the locator while it is short; scrolled once it
      is not. The locator itself never moves either way. */
-  /* `hidden`, never `auto`. The reading screen does not scroll -- not the band,
-     not the column, not the page. A translation too long for its band is SET
-     SMALLER until it fits (see `fitTranslation`), and only when even the
-     smallest size the panel offers is too big does anything get cut.
+  /* Centred in the room above the locator while it is short; scrolled once it
+     is not. The locator itself never moves either way.
 
-     `stretch`, and NOT `align-self: center; max-height: 100%`. That pair sizes
-     the box to its own text until the text outgrows the row, which means
+     `stretch` and `safe center`, NOT `align-self: center; max-height: 100%`.
+     That pair sizes the box to its own text until the text outgrows the row, so
      `clientHeight` answers a different question depending on which side of the
-     line the verse falls -- sometimes the room available, sometimes the room
-     used. The fit needs the first and would silently get the second. Stretching
-     to the row makes the box a fixed question and the text the only variable;
-     `safe center` then does the centring `align-self` was there for, and does
-     it without pushing the first line out of reach when the text overflows. */
-  align-self: stretch; min-height: 0; overflow: hidden;
+     line a verse falls -- sometimes the room available, sometimes the room
+     used -- and `[data-more]` below needs the first. `safe` is what keeps the
+     centring from pushing the FIRST line out of reach once the text overflows,
+     which is the classic way a centred scroll container loses its own top. */
+  align-self: stretch; min-height: 0;
   display: grid; align-content: safe center;
+  overflow-y: auto; overscroll-behavior: contain;
   /* The same number the box reserves its four lines from -- set once, in
      TRANSLATIONS, so the room and the type can never disagree about how tall a
      line of this script is. */
@@ -333,20 +331,32 @@ button {
   font-family: var(--font-urdu); text-wrap: wrap;
   padding-bottom: 0.3em;
 }
-/* The last resort, and the only cut left. A translation is set smaller until it
-   fits its band; a very few -- 2:282's Urdu is the worst of them -- will not fit
-   even at the smallest size the panel offers, and are cut. Marking the cut is
-   the whole of what is owed there: nothing scrolls, so there is no affordance
-   to offer, only the difference between a translation that ended and one that
-   ran out of room.
+/* What is below the fold, said in the one language a clipped box otherwise has
+   none of. Overlay scrollbars draw nothing until something scrolls, so a
+   translation that simply stops at the fourth line looks exactly like one that
+   ended there -- and the next arrow then replaces it with the next ayah's,
+   unread. A last line that fades says both of the things the reader needs: that
+   there is more of this, and that the band will move if they ask it to.
 
    A MASK rather than a gradient laid over the top, because what is behind the
    translation is a surface colour in three themes and a printed-page wash in
    the fourth, and a fade painted in one flat colour would show its own edge on
    paper. Fading the ink itself is right on every ground there is. */
-.translation[data-clipped] .translation__text {
+.translation[data-more='below'] .translation__text {
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
+}
+/* Scrolled to the end: nothing below any more, but the first line is now above
+   the fold and the top edge is where the text runs out. */
+.translation[data-more='above'] .translation__text {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade));
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade));
+}
+.translation[data-more='both'] .translation__text {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade),
+    #000 calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade),
+    #000 calc(100% - var(--fade)), transparent);
 }
 .locator {
   font: 400 11px/1 var(--font-mono);
@@ -798,19 +808,14 @@ a.btn--primary { color: var(--surface); }
      about the type: at a large size it bought two lines of English and one of
      Urdu, which is a size the reader asked for and a translation they could not
      read. It is still ONE translation of the whole ayah, held unbroken while
-     the parts turn under it; what will not fit the four lines is met by setting
-     the type smaller, never by a scrollbar nobody across a room could use. */
+     the parts turn under it; only its viewport is capped, and the fading line
+     below says as much. */
   /* `max-height`, unlike the reader's band, because the overlay CENTRES the
      ayah and its translation as a pair: a box that kept its full height for a
      one-line translation would push the Arabic up and take paging room for
-     nothing. The cost is that `clientHeight` here answers with the room USED,
-     not the room available, so the fit works its own ceiling out in JS rather
-     than reading it back off this line -- see `fitTranslation`. */
+     nothing. */
   max-height: min(calc(4 * var(--tv-trans-size, 18px) * var(--tv-trans-lead, 1.55)), 40%);
-  /* `hidden`, never `auto` -- see the reader's band. Across a room there is no
-     scrollbar to notice and nothing to reach it with, so the type gives way
-     instead. */
-  overflow: hidden;
+  overflow-y: auto; overscroll-behavior: contain;
   font-family: var(--font-ui); font-weight: 400;
   line-height: var(--tv-trans-lead, 1.55);
   --fade: 1.3em;
@@ -818,7 +823,7 @@ a.btn--primary { color: var(--surface); }
      of the Arabic. Tying it to the Arabic made entering fullscreen change a
      size the reader had just set, and made `[` and `]` move the translation
      too. The clamp is built in tv.ts, from the one setting that owns this. */
-  font-size: var(--tv-trans-fit, var(--tv-trans-size, 18px));
+  font-size: var(--tv-trans-size, 18px);
 }
 .tv__translation[data-lang='ur'] {
   font-family: var(--font-urdu);
@@ -827,10 +832,22 @@ a.btn--primary { color: var(--surface); }
      reader's rule for what it is fixing. */
   padding-bottom: 0.3em;
 }
-/* The same last-resort cut the reader marks, by the same means. */
-.tv__stack[data-clipped] .tv__translation {
+/* The same soft edge the reader uses, for the same reason and by the same
+   means. It matters more here: across a room there is no scrollbar to notice at
+   all, so the fading line is the only thing saying the box has more in it. */
+.tv__stack[data-more='below'] .tv__translation {
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
+}
+.tv__stack[data-more='above'] .tv__translation {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade));
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade));
+}
+.tv__stack[data-more='both'] .tv__translation {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade),
+    #000 calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade),
+    #000 calc(100% - var(--fade)), transparent);
 }
 .tv__ayah[data-font='amiri-quran'] { font-family: var(--font-amiri); }
 .tv__foot {
